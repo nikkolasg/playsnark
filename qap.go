@@ -2,7 +2,9 @@ package playsnark
 
 import "github.com/drand/kyber/share"
 
-// QAP is the polynomial version of a R1CS circuit
+// QAP is the polynomial version of a R1CS circuit. It contains the left right
+// and outputs polynomials. There are exactly n polynomials for each, where n is
+// the number of variables.
 type QAP struct {
 	left  []Poly
 	right []Poly
@@ -62,4 +64,68 @@ func qapInterpolate(m Matrix) []Poly {
 func toPoly(s *share.PriPoly) Poly {
 	pp := s.Coefficients()
 	return Poly(pp)
+}
+
+// Verify takes the vector of solution and makes the dot product with it such
+// that
+// t = (Left . s) * (Right . s) - (Out . s)
+// z = minimal polynomial = (x - 1) * (x - 2) .. (x - #ofgates)
+// h = t/z with no remainder ! if there is no remainder, that means
+// the polynomial t vanishes on all the points corresponding to the gate since
+// z is a factor, hence the solution is correct
+func (q QAP) Verify(sol Vector) bool {
+	// create Z(x) = 1 so we can multiply it easily afterwards
+	z := Poly([]Element{NewElement().One()})
+	for i := 1; i <= len(q.left); i++ {
+		// you multiply by (x - i) with i being as high as the number of gates,
+		// which is exactly the number of coefficients of A
+		minusi := NewElement().SetInt64(int64(i))
+		minusi = minusi.Neg(minusi)
+		xi := Poly([]Element{minusi, NewElement().One()})
+		z = z.Mul(xi)
+	}
+
+	// We need to multiply each entry of the solution with the corresponding
+	// polynomial.
+	// The original python code is short and self explanatory:
+	// for rval, a in zip(r, new_A):
+	//  Apoly = add_polys(Apoly, multiply_polys([rval], a))
+	//
+	// Let me try to debunk that, by taking the left polynomials as example
+	//  * There are 6 left polynomials, one for each variable, that set or unset
+	//  the variable depending on the gate it is evaluated for.
+	//  * The solution vector is of length 6, giving the value to set for each
+	//  variable
+	//  * We want to make a polynomial that evaluates all these polynomials at
+	//  once that when "multiplied" (dot product) by the solution vector gives
+	//  assign the right value to the right variable at the right gate, as in
+	//  R1CS.
+	//
+	// Left one
+	left := Poly([]Element{NewElement().One()})
+	for i, sval := range sol {
+		left = left.Add(q.left[i].Mul(Poly([]Element{Value(sval).ToFieldElement()})))
+	}
+
+	right := Poly([]Element{NewElement().One()})
+	for i, sval := range sol {
+		right = right.Add(q.right[i].Mul(Poly([]Element{Value(sval).ToFieldElement()})))
+	}
+
+	out := Poly([]Element{NewElement().One()})
+	for i, sval := range sol {
+		out = out.Add(q.out[i].Mul(Poly([]Element{Value(sval).ToFieldElement()})))
+	}
+
+	// Now we are using these precedent polynomials in the satisfying equation
+	// left(x) * right(x) - out(x) = h(x)z(x)
+	eq := left.Mul(right).Sub(out)
+
+	// now we try to verify if the equation is really satisfied by dividing eq /
+	// z(x) : we should find no remainder
+	_, rem := eq.Div(z)
+	if rem.Degree() >= 0 {
+		return false
+	}
+	return true
 }

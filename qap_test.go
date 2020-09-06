@@ -25,3 +25,11 @@ func TestQAPSnarkManual(t *testing.T) {
 	require.True(t, xPoly.Eval(2).Equal(Value(1).ToFieldElement()))
 	require.True(t, xPoly.Eval(3).Equal(Value(0).ToFieldElement()))
 }
+
+func TestQAPValidity(t *testing.T) {
+	s := createWitness()
+	r1cs := createR1CS()
+	qap := ToQAP(r1cs)
+	require.True(t, qap.Verify(s))
+
+}

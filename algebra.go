@@ -71,7 +71,12 @@ type Poly []Element
 type PolyCommit []Commit
 
 func (p Poly) Degree() int {
-	return len(p) - 1
+	for d := len(p) - 1; d >= 0; d-- {
+		if !p[d].Equal(zero) {
+			return d
+		}
+	}
+	return -1
 }
 
 func (p Poly) Mul(p2 Poly) Poly {
@@ -80,7 +85,6 @@ func (p Poly) Mul(p2 Poly) Poly {
 	for i := 0; i < l; i++ {
 		output[i] = NewElement()
 	}
-
 	for i, v1 := range p {
 		for j, v2 := range p2 {
 			tmp := NewElement().Mul(v1, v2)
@@ -98,7 +102,8 @@ func (p Poly) Eval(i int) Element {
 
 var zero = NewElement()
 
-// Div returns the quotient p / p2 and the remainder
+// Div returns the quotient p / p2 and the remainder using polynomial synthetic
+// division
 func (p Poly) Div(p2 Poly) (q Poly, r Poly) {
 	dividend := p
 	divisor := p2
@@ -119,6 +124,21 @@ func (p Poly) Div(p2 Poly) (q Poly, r Poly) {
 	return out[:separator], out[separator:]
 }
 
+// Long polynomial division
+func (p Poly) Div2(p2 Poly) (q Poly, r Poly) {
+	r = p.Clone()
+	for len(r) > 0 && r.Degree() >= p2.Degree() {
+		num := r[len(r)-1].Clone()
+		t := num.Div(num, p2[len(p2)-1])
+		degreeT := r.Degree() - p2.Degree()
+		tPoly := newPoly(degreeT)
+		tPoly[len(tPoly)-1] = t
+		q = q.Add(tPoly)
+		r = r.Sub(tPoly.Mul(p2))
+	}
+	return
+}
+
 func (p Poly) Add(p2 Poly) Poly {
 	max := len(p)
 	if max < len(p2) {
@@ -136,4 +156,51 @@ func (p Poly) Add(p2 Poly) Poly {
 		output[i] = output[i].Add(output[i], p2[i])
 	}
 	return output
+}
+
+func (p Poly) Sub(p2 Poly) Poly {
+	max := len(p)
+	if max < len(p2) {
+		max = len(p2)
+	}
+
+	output := make(Poly, max)
+	for i := range p {
+		output[i] = NewElement().Set(p[i])
+	}
+	for i := range p2 {
+		if output[i] == nil {
+			output[i] = NewElement()
+		}
+		output[i] = output[i].Sub(output[i], p2[i])
+	}
+	return output
+}
+func (p Poly) Equal(p2 Poly) bool {
+	if p.Degree() != p2.Degree() {
+		return false
+	}
+
+	for i := 0; i < p.Degree(); i++ {
+		if !p[i].Equal(p2[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func (p Poly) Clone() Poly {
+	o := make(Poly, len(p))
+	for i := 0; i < len(p); i++ {
+		o[i] = p[i].Clone()
+	}
+	return o
+}
+
+func newPoly(d int) Poly {
+	o := make(Poly, d+1)
+	for i := 0; i <= d; i++ {
+		o[i] = NewElement()
+	}
+	return o
 }

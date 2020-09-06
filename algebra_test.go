@@ -66,13 +66,38 @@ func TestPolyAdd(t *testing.T) {
 	}
 }
 
-func TestPolyDiv(t *testing.T) {
-	/*p1 := randomPoly(5)*/
-	//p2 := randomPoly(4)
-	//// p1 = q * p2 + r
-	//q,r := p1.Div(p2)
+func TestPolyDivManual(t *testing.T) {
+	// p2(x) = 1 + 2x
+	p2 := Poly([]Element{
+		Value(1).ToFieldElement(),
+		Value(2).ToFieldElement(),
+	})
+	// q = 2x
+	q := Poly([]Element{
+		NewElement(),
+		Value(2).ToFieldElement(),
+	})
+	// p1 = p2 * q = (1+2x) * 2x = 2x + 4x^2
+	p1 := Poly([]Element{
+		NewElement(),
+		Value(2).ToFieldElement(),
+		Value(4).ToFieldElement(),
+	})
 
-	/*q.Mul(p2)*/
+	expQ, expR := p1.Div(p2)
+	require.True(t, q.Equal(expQ))
+	require.Equal(t, expR.Degree(), -1)
+}
+
+func TestPolyDiv(t *testing.T) {
+	p1 := randomPoly(5)
+	p2 := randomPoly(4)
+	// p1 = q * p2 + r
+	q, r := p1.Div(p2)
+
+	// so p2 * q + r <=> p1
+	exp := q.Mul(p2).Add(r)
+	require.True(t, p1.Equal(exp))
 }
 
 func randomPoly(d int) Poly {
