@@ -100,7 +100,18 @@ func (q QAP) Verify(sol Vector) bool {
 	//  once that when "multiplied" (dot product) by the solution vector gives
 	//  assign the right value to the right variable at the right gate, as in
 	//  R1CS.
-	//
+	//  * So we take the polynomial that corresponds to the first variable,
+	//  multiply by the value from the solution vector, and add it to a
+	//  acumulator polynomial.
+	//  * We do the same for the second variable and we add it to the
+	//  accumulator etc
+	//  * That means when we evaluate solution at the first gate, so x=1, we
+	//  will look diretly at all assignements of all variables in _one_ polynomial
+	//  which is already "multiplied" by the solution vector
+	//   ==> Ai(x) * si + Aj(x) * sj ...
+	//   When evaluated to 1, first term will give the value of the const at the
+	//   first gate, second term will give the value of the input "x" at the
+	//   first gate etc
 	// Left one
 	left := Poly([]Element{NewElement().One()})
 	for i, sval := range sol {
