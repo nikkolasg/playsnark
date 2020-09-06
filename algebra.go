@@ -1,6 +1,8 @@
 package playsnark
 
-import "github.com/drand/kyber/share"
+import (
+	"github.com/drand/kyber/share"
+)
 
 type Value int
 
@@ -92,4 +94,46 @@ func (p Poly) Eval(i int) Element {
 	ps := share.CoefficientsToPriPoly(Group, p)
 	sh := ps.Eval(i)
 	return sh.V
+}
+
+var zero = NewElement()
+
+// Div returns the quotient p / p2 and the remainder
+func (p Poly) Div(p2 Poly) (q Poly, r Poly) {
+	dividend := p
+	divisor := p2
+	out := make(Poly, len(dividend))
+	for i, c := range dividend {
+		out[i] = NewElement().Set(c)
+	}
+	for i := 0; i < len(dividend)-(len(divisor)-1); i++ {
+		out[i].Div(out[i], divisor[0])
+		if coef := out[i]; !coef.Equal(zero) {
+			var a = NewElement()
+			for j := 1; j < len(divisor); j++ {
+				out[i+j].Add(out[i+j], a.Mul(a.Neg(divisor[j]), coef))
+			}
+		}
+	}
+	separator := len(out) - (len(divisor) - 1)
+	return out[:separator], out[separator:]
+}
+
+func (p Poly) Add(p2 Poly) Poly {
+	max := len(p)
+	if max < len(p2) {
+		max = len(p2)
+	}
+
+	output := make(Poly, max)
+	for i := range p {
+		output[i] = NewElement().Set(p[i])
+	}
+	for i := range p2 {
+		if output[i] == nil {
+			output[i] = NewElement()
+		}
+		output[i] = output[i].Add(output[i], p2[i])
+	}
+	return output
 }

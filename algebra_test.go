@@ -3,6 +3,7 @@ package playsnark
 import (
 	"testing"
 
+	"github.com/drand/kyber/util/random"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,4 +35,50 @@ func TestPolyMul(t *testing.T) {
 	for i := 0; i < p3.Degree(); i++ {
 		require.Equal(t, p3[i], exp[i])
 	}
+}
+
+func TestPolyAdd(t *testing.T) {
+	type TestVector struct {
+		A Poly
+		B Poly
+	}
+	for row, tv := range []TestVector{
+		{
+			A: randomPoly(4),
+			B: randomPoly(6),
+		},
+		{
+			A: randomPoly(6),
+			B: randomPoly(4),
+		},
+		{
+			A: randomPoly(5),
+			B: randomPoly(5),
+		},
+	} {
+		x := 10
+		res := tv.A.Add(tv.B)
+		// test for homomorphism
+		// A(x) + B(x) = (A + B)(x)
+		exp := tv.A.Eval(x)
+		exp = exp.Add(exp, tv.B.Eval(x))
+		require.Equal(t, res.Eval(x), exp, "failed at row %d", row)
+	}
+}
+
+func TestPolyDiv(t *testing.T) {
+	/*p1 := randomPoly(5)*/
+	//p2 := randomPoly(4)
+	//// p1 = q * p2 + r
+	//q,r := p1.Div(p2)
+
+	/*q.Mul(p2)*/
+}
+
+func randomPoly(d int) Poly {
+	var poly = make(Poly, 0, d+1)
+	for i := 0; i <= d; i++ {
+		poly = append(poly, NewElement().Pick(random.New()))
+	}
+	return poly
 }
