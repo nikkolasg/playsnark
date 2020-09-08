@@ -20,4 +20,6 @@ func TestR1CSEquation(t *testing.T) {
 	o := r1cs.out.Mul(s)
 	left := l.Hadamard(r).Sub(o)
 	require.True(t, left.IsZero())
+
+	require.Len(t, r1cs.left[0], len(s))
 }

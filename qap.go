@@ -1,6 +1,10 @@
 package playsnark
 
-import "github.com/drand/kyber/share"
+import (
+	"fmt"
+
+	"github.com/drand/kyber/share"
+)
 
 // QAP is the polynomial version of a R1CS circuit. It contains the left right
 // and outputs polynomials. There are exactly n polynomials for each, where n is
@@ -74,6 +78,7 @@ func toPoly(s *share.PriPoly) Poly {
 // the polynomial t vanishes on all the points corresponding to the gate since
 // z is a factor, hence the solution is correct
 func (q QAP) Verify(sol Vector) bool {
+	q.sanityCheck(sol)
 	// create Z(x) = 1 so we can multiply it easily afterwards
 	z := Poly([]Element{NewElement().One()})
 	for i := 1; i <= len(q.left); i++ {
@@ -111,11 +116,15 @@ func (q QAP) Verify(sol Vector) bool {
 	//   ==> Ai(x) * si + Aj(x) * sj ...
 	//   When evaluated to 1, first term will give the value of the const at the
 	//   first gate, second term will give the value of the input "x" at the
-	//   first gate etc
+	//   first gate etc leading to the same values as in R1CS.
 	// Left one
 	left := Poly([]Element{NewElement().One()})
 	for i, sval := range sol {
-		left = left.Add(q.left[i].Mul(Poly([]Element{Value(sval).ToFieldElement()})))
+		svalPoly := Poly([]Element{Value(sval).ToFieldElement()})
+		fmt.Printf("q.left[i]: %+v\n", q.left[i])
+		fmt.Printf("svalPoly: %+v\n", svalPoly)
+		sold := q.left[i].Mul(svalPoly)
+		left = left.Add(sold)
 	}
 
 	right := Poly([]Element{NewElement().One()})
@@ -135,8 +144,22 @@ func (q QAP) Verify(sol Vector) bool {
 	// now we try to verify if the equation is really satisfied by dividing eq /
 	// z(x) : we should find no remainder
 	_, rem := eq.Div(z)
-	if rem.Degree() >= 0 {
+	if len(rem.Normalize()) >= 0 {
 		return false
 	}
 	return true
+}
+
+func (q QAP) sanityCheck(sol Vector) {
+	if len(sol) != len(q.left) {
+		panic("different number of solution variables than left polynomials")
+	}
+
+	if len(sol) != len(q.right) {
+		panic("different numberof solution variables than right polynomials")
+	}
+
+	if len(sol) != len(q.out) {
+		panic("different numbers of solutions variables than out polynomials")
+	}
 }

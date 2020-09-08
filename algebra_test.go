@@ -31,8 +31,8 @@ func TestPolyMul(t *testing.T) {
 
 	p3 := p1.Mul(p2)
 
-	require.Equal(t, exp.Degree(), p3.Degree())
-	for i := 0; i < p3.Degree(); i++ {
+	require.Equal(t, len(exp), len(p3))
+	for i := 0; i < len(p3); i++ {
 		require.Equal(t, p3[i], exp[i])
 	}
 }
@@ -66,6 +66,25 @@ func TestPolyAdd(t *testing.T) {
 	}
 }
 
+func TestMatrixTranspose(t *testing.T) {
+	var m Matrix = Matrix([]Vector{
+		Vector([]Value{Value(1), Value(2), Value(3), Value(4)}),
+		Vector([]Value{Value(5), Value(6), Value(7), Value(8)}),
+		Vector([]Value{Value(9), Value(10), Value(11), Value(12)}),
+	})
+	var exp Matrix = Matrix([]Vector{
+		Vector([]Value{Value(1), Value(5), Value(9)}),
+		Vector([]Value{Value(2), Value(6), Value(10)}),
+		Vector([]Value{Value(3), Value(7), Value(11)}),
+		Vector([]Value{Value(4), Value(8), Value(12)}),
+	})
+
+	tm := m.Transpose()
+	require.Len(t, m, 3)
+	require.Len(t, tm, 4)
+	require.Equal(t, exp, tm)
+}
+
 func TestPolyDivManual(t *testing.T) {
 	// p2(x) = 1 + 2x
 	p2 := Poly([]Element{
@@ -86,14 +105,14 @@ func TestPolyDivManual(t *testing.T) {
 
 	expQ, expR := p1.Div(p2)
 	require.True(t, q.Equal(expQ))
-	require.Equal(t, expR.Degree(), -1)
+	require.Equal(t, len(expR.Normalize()), 0)
 }
 
 func TestPolyDiv(t *testing.T) {
 	p1 := randomPoly(5)
 	p2 := randomPoly(4)
 	// p1 = q * p2 + r
-	q, r := p1.Div(p2)
+	q, r := p1.Div2(p2)
 
 	// so p2 * q + r <=> p1
 	exp := q.Mul(p2).Add(r)

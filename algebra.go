@@ -23,8 +23,9 @@ func (m Matrix) Column(i int) Vector {
 }
 
 func (m Matrix) Transpose() Matrix {
-	m2 := make(Matrix, 0, len(m[0]))
-	for i := range m {
+	nbRow := len(m[0])
+	m2 := make(Matrix, 0, nbRow)
+	for i := 0; i < nbRow; i++ {
 		m2 = append(m2, m.Column(i))
 	}
 	return m2
@@ -70,17 +71,8 @@ func (v Vector) IsZero() bool {
 type Poly []Element
 type PolyCommit []Commit
 
-func (p Poly) Degree() int {
-	for d := len(p) - 1; d >= 0; d-- {
-		if !p[d].Equal(zero) {
-			return d
-		}
-	}
-	return -1
-}
-
 func (p Poly) Mul(p2 Poly) Poly {
-	l := p.Degree() + p2.Degree() + 1
+	l := len(p) + len(p2) - 1
 	output := make(Poly, l)
 	for i := 0; i < l; i++ {
 		output[i] = NewElement()
@@ -127,14 +119,20 @@ func (p Poly) Div(p2 Poly) (q Poly, r Poly) {
 // Long polynomial division
 func (p Poly) Div2(p2 Poly) (q Poly, r Poly) {
 	r = p.Clone()
-	for len(r) > 0 && r.Degree() >= p2.Degree() {
+	for len(r) > 0 && len(r) >= len(p2) {
 		num := r[len(r)-1].Clone()
 		t := num.Div(num, p2[len(p2)-1])
-		degreeT := r.Degree() - p2.Degree()
+		degreeT := len(r) - len(p2)
 		tPoly := newPoly(degreeT)
 		tPoly[len(tPoly)-1] = t
 		q = q.Add(tPoly)
-		r = r.Sub(tPoly.Mul(p2))
+		// tPoly is n-th coefficient of p / highest of p2 (degree m)
+		// (a / b) * x^(n-m)
+		// so tPoly * p2 has degree n
+		// tPoly * p2 = a * x^n + ... x^n-1 + ...
+		// so we can remove the last coefficient of "r" since r always contains
+		// the highest coefficient of p not "removed" so far
+		r = r.Sub(tPoly.Mul(p2))[:len(r)-1]
 	}
 	return
 }
@@ -177,11 +175,11 @@ func (p Poly) Sub(p2 Poly) Poly {
 	return output
 }
 func (p Poly) Equal(p2 Poly) bool {
-	if p.Degree() != p2.Degree() {
+	if len(p) != len(p) {
 		return false
 	}
 
-	for i := 0; i < p.Degree(); i++ {
+	for i := 0; i < len(p); i++ {
 		if !p[i].Equal(p2[i]) {
 			return false
 		}
@@ -203,4 +201,18 @@ func newPoly(d int) Poly {
 		o[i] = NewElement()
 	}
 	return o
+}
+
+// Normalize remove all the 0 coefficients from the highest degree downwards
+// until it encounters a non zero coefficients (i.e. len(p) will give the degree
+// of the coefficient)
+func (p Poly) Normalize() Poly {
+	maxi := len(p)
+	for i := len(p) - 1; i >= 0; i-- {
+		if !p[i].Equal(zero) {
+			return p[:maxi]
+		}
+		maxi--
+	}
+	return p[:maxi]
 }
