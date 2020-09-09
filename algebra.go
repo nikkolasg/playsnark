@@ -1,7 +1,9 @@
 package playsnark
 
 import (
-	"github.com/drand/kyber/share"
+	"sort"
+
+	"github.com/drand/kyber"
 )
 
 type Value int
@@ -86,13 +88,18 @@ func (p Poly) Mul(p2 Poly) Poly {
 	return output
 }
 
-func (p Poly) Eval(i int) Element {
-	ps := share.CoefficientsToPriPoly(Group, p)
-	sh := ps.Eval(i)
-	return sh.V
+func (p Poly) Eval(i Element) Element {
+	xi := i.Clone()
+	v := zero.Clone()
+	for j := len(p) - 1; j >= 0; j-- {
+		v.Mul(v, xi)
+		v.Add(v, p[j])
+	}
+	return v
 }
 
 var zero = NewElement()
+var one = NewElement().SetInt64(1)
 
 // Div returns the quotient p / p2 and the remainder using polynomial synthetic
 // division
@@ -117,7 +124,7 @@ func (p Poly) Div(p2 Poly) (q Poly, r Poly) {
 }
 
 // Long polynomial division
-func (p Poly) Div2(p2 Poly) (q Poly, r Poly) {
+func (p *Poly) Div2(p2 Poly) (q Poly, r Poly) {
 	r = p.Clone()
 	for len(r) > 0 && len(r) >= len(p2) {
 		num := r[len(r)-1].Clone()
@@ -134,6 +141,7 @@ func (p Poly) Div2(p2 Poly) (q Poly, r Poly) {
 		// the highest coefficient of p not "removed" so far
 		r = r.Sub(tPoly.Mul(p2))[:len(r)-1]
 	}
+	r.Normalize()
 	return
 }
 
@@ -215,4 +223,99 @@ func (p Poly) Normalize() Poly {
 		maxi--
 	}
 	return p[:maxi]
+}
+
+type pair struct {
+	I int
+	V Element
+}
+
+// Interpolate takes a list of element [ y_1, ...  y_n] and returns
+// a polynomial p such that (note the indices)
+// p(1) = y_1, p(2) = y_2, ... p(n) = y_n
+// Code largely taken from github.com/drand/kyber
+func Interpolate(ys []Element) Poly {
+	var pairs []pair
+	for i, y := range ys {
+		pairs = append(pairs, pair{I: i + 1, V: y})
+	}
+	x, y := xyScalar(Group, pairs)
+
+	var accPoly = Poly([]Element{zero})
+	//den := g.Scalar()
+	// Notations follow the Wikipedia article on Lagrange interpolation
+	// https://en.wikipedia.org/wiki/Lagrange_polynomial
+	for j := range x {
+		basis := lagrangeBasis(Group, j, x)
+		for i := range basis {
+			basis[i] = basis[i].Mul(basis[i], y[j])
+		}
+
+		if accPoly == nil {
+			accPoly = basis
+			continue
+		}
+
+		// add all L_j * y_j together
+		accPoly = accPoly.Add(basis)
+	}
+	return accPoly
+}
+
+type byIndexScalar []pair
+
+func (s byIndexScalar) Len() int           { return len(s) }
+func (s byIndexScalar) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s byIndexScalar) Less(i, j int) bool { return s[i].I < s[j].I }
+
+// xyScalar returns the list of (x_i, y_i) pairs indexed. The first map returned
+// is the list of x_i and the second map is the list of y_i, both indexed in
+// their respective map at index i.
+func xyScalar(g kyber.Group, shares []pair) (map[int]Element, map[int]Element) {
+	// we are sorting first the shares since the shares may be unrelated for
+	// some applications. In this case, all participants needs to interpolate on
+	// the exact same order shares.
+	sorted := make([]pair, 0, len(shares))
+	for _, share := range shares {
+		sorted = append(sorted, share)
+	}
+	sort.Sort(byIndexScalar(sorted))
+
+	x := make(map[int]kyber.Scalar)
+	y := make(map[int]kyber.Scalar)
+	for _, s := range sorted {
+		if s.V == nil || s.I < 0 {
+			continue
+		}
+		idx := s.I
+		x[idx] = g.Scalar().SetInt64(int64(idx))
+		y[idx] = s.V
+	}
+	return x, y
+}
+
+// lagrangeBasis returns a PriPoly containing the Lagrange coefficients for the
+// i-th position. xs is a mapping between the indices and the values that the
+// interpolation is using, computed with xyScalar().
+func lagrangeBasis(g kyber.Group, i int, xs map[int]Element) Poly {
+	var basis = Poly([]Element{one.Clone()})
+	// compute lagrange basis l_j
+	den := g.Scalar().One()
+	var acc = g.Scalar().One()
+	for m, xm := range xs {
+		if i == m {
+			continue
+		}
+		// multiply by x -i
+		basis = basis.Mul(Poly([]Element{NewElement().Neg(xm), one.Clone()}))
+		den.Sub(xs[i], xm) // den = xi - xm
+		den.Inv(den)       // den = 1 / den
+		acc.Mul(acc, den)  // acc = acc * den
+	}
+
+	// multiply all coefficients by the denominator
+	for i := range basis {
+		basis[i] = basis[i].Mul(basis[i], acc)
+	}
+	return basis
 }

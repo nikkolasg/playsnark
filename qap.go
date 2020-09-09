@@ -1,8 +1,6 @@
 package playsnark
 
 import (
-	"fmt"
-
 	"github.com/drand/kyber/share"
 )
 
@@ -10,9 +8,13 @@ import (
 // and outputs polynomials. There are exactly n polynomials for each, where n is
 // the number of variables.
 type QAP struct {
-	left  []Poly
-	right []Poly
-	out   []Poly
+	nbGates  int
+	left     []Poly
+	right    []Poly
+	out      []Poly
+	aggLeft  Poly
+	aggRight Poly
+	aggOut   Poly
 }
 
 // ToQAP takes a R1CS circuit description and turns it into its polynomial QAP
@@ -26,13 +28,12 @@ func ToQAP(circuit R1CS) QAP {
 	right := qapInterpolate(circuit.right)
 	out := qapInterpolate(circuit.out)
 	return QAP{
-		left:  left,
-		right: right,
-		out:   out,
+		nbGates: len(circuit.left),
+		left:    left,
+		right:   right,
+		out:     out,
 	}
 }
-
-type pair = share.PriShare
 
 func qapInterpolate(m Matrix) []Poly {
 	// once transposed, a row of this matrix represents all the usage of this
@@ -46,21 +47,17 @@ func qapInterpolate(m Matrix) []Poly {
 	// so for example the second row of the transposed matrix represents all the
 	// usage of the variable "x" as a left wire in the circuit -> [1,0,1,0]
 	// Then we need to interpolate this as a polynomial such that:
-	// p(0) = 1, p(1) = 0, p(2) = 1 and p(3) = 0
+	// p(1) = 1, p(2) = 0, p(3) = 1 and p(4) = 0
 	// We return one polynomial for each variable
 	t := m.Transpose()
 	out := make([]Poly, 0, len(t))
 	for _, variable := range t {
-		pairs := make([]*pair, 0, len(variable))
-		for i, v := range variable {
-			pairs = append(pairs, &pair{I: i, V: v.ToFieldElement()})
+		var ys = make([]Element, 0, len(t))
+		for _, v := range variable {
+			ys = append(ys, v.ToFieldElement())
 		}
-		// lagrange interpolation - uses an existing implementation
-		sharePoly, err := share.RecoverPriPoly(Group, pairs, len(pairs), len(pairs))
-		if err != nil {
-			panic(err)
-		}
-		out = append(out, toPoly(sharePoly))
+		poly := Interpolate(ys)
+		out = append(out, poly)
 	}
 	return out
 }
@@ -77,19 +74,8 @@ func toPoly(s *share.PriPoly) Poly {
 // h = t/z with no remainder ! if there is no remainder, that means
 // the polynomial t vanishes on all the points corresponding to the gate since
 // z is a factor, hence the solution is correct
-func (q QAP) Verify(sol Vector) bool {
+func (q *QAP) ProcessSolution(sol Vector) {
 	q.sanityCheck(sol)
-	// create Z(x) = 1 so we can multiply it easily afterwards
-	z := Poly([]Element{NewElement().One()})
-	for i := 1; i <= len(q.left); i++ {
-		// you multiply by (x - i) with i being as high as the number of gates,
-		// which is exactly the number of coefficients of A
-		minusi := NewElement().SetInt64(int64(i))
-		minusi = minusi.Neg(minusi)
-		xi := Poly([]Element{minusi, NewElement().One()})
-		z = z.Mul(xi)
-	}
-
 	// We need to multiply each entry of the solution with the corresponding
 	// polynomial.
 	// The original python code is short and self explanatory:
@@ -118,33 +104,46 @@ func (q QAP) Verify(sol Vector) bool {
 	//   first gate, second term will give the value of the input "x" at the
 	//   first gate etc leading to the same values as in R1CS.
 	// Left one
-	left := Poly([]Element{NewElement().One()})
-	for i, sval := range sol {
-		svalPoly := Poly([]Element{Value(sval).ToFieldElement()})
-		fmt.Printf("q.left[i]: %+v\n", q.left[i])
-		fmt.Printf("svalPoly: %+v\n", svalPoly)
-		sold := q.left[i].Mul(svalPoly)
-		left = left.Add(sold)
+	left := Poly([]Element{})
+	right := Poly([]Element{})
+	out := Poly([]Element{})
+	for varIndex, val := range sol {
+		polyVal := Poly([]Element{val.ToFieldElement()})
+		left = left.Add(q.left[varIndex].Mul(polyVal))
+		right = right.Add(q.right[varIndex].Mul(polyVal))
+		out = out.Add(q.out[varIndex].Mul(polyVal))
 	}
+	q.aggLeft = left
+	q.aggRight = right
+	q.aggOut = out
+}
 
-	right := Poly([]Element{NewElement().One()})
-	for i, sval := range sol {
-		right = right.Add(q.right[i].Mul(Poly([]Element{Value(sval).ToFieldElement()})))
-	}
-
-	out := Poly([]Element{NewElement().One()})
-	for i, sval := range sol {
-		out = out.Add(q.out[i].Mul(Poly([]Element{Value(sval).ToFieldElement()})))
+func (q *QAP) IsValid() bool {
+	// create Z(x) = 1 so we can multiply it easily afterwards
+	var z Poly
+	for i := 1; i <= q.nbGates; i++ {
+		// you multiply by (x - i) with i being as high as the number of gates,
+		// because the polynomials left,right and out vanishes on these inputs
+		// -i + x
+		xi := Poly([]Element{
+			NewElement().Neg(Value(i).ToFieldElement()),
+			one.Clone(),
+		})
+		if z == nil {
+			z = xi
+		} else {
+			z = z.Mul(xi)
+		}
 	}
 
 	// Now we are using these precedent polynomials in the satisfying equation
-	// left(x) * right(x) - out(x) = h(x)z(x)
-	eq := left.Mul(right).Sub(out)
+	// t(x) = left(x) * right(x) - out(x) = h(x)z(x)
+	t := q.aggLeft.Mul(q.aggRight).Sub(q.aggOut)
 
 	// now we try to verify if the equation is really satisfied by dividing eq /
 	// z(x) : we should find no remainder
-	_, rem := eq.Div(z)
-	if len(rem.Normalize()) >= 0 {
+	_, rem := t.Div2(z)
+	if len(rem.Normalize()) > 0 {
 		return false
 	}
 	return true

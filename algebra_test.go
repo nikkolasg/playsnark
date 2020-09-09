@@ -7,7 +7,57 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPolyMul(t *testing.T) {
+func TestAlgebraEval(t *testing.T) {
+	var p Poly = Poly([]Element{
+		Value(1).ToFieldElement(),
+		Value(1).ToFieldElement(),
+	})
+
+	res := p.Eval(Value(1).ToFieldElement())
+	exp := Value(2).ToFieldElement()
+	require.True(t, res.Equal(exp))
+}
+
+func TestAlgebraInterpolate(t *testing.T) {
+	var r = randomPoly(4)
+	p := Interpolate([]Element(r))
+	for i := 0; i < len(r); i++ {
+		res := p.Eval(Value(i + 1).ToFieldElement())
+		exp := r[i]
+		require.True(t, res.Equal(exp))
+	}
+}
+
+// Test the minimal polynomial division theorem in algebra
+func TestAlgebraMinimal(t *testing.T) {
+	// t(x) = h(x) * z(x)
+	// where
+	// z(x) is the minimal polynomial
+	// <=> z(x) = (x-1) * (x-2)
+	// h(x) = 2x
+	// therefore
+	// t(x) = (x-1)*(x-2)*2x = 2x^3 - 6x^2 + 4x
+	var p Poly = Poly([]Element{
+		zero.Clone(),
+		Value(4).ToFieldElement(),
+		NewElement().Neg(Value(6).ToFieldElement()),
+		Value(2).ToFieldElement(),
+	})
+
+	var z Poly = Poly([]Element{one.Clone()})
+	for i := 1; i <= 2; i++ {
+		root := Poly([]Element{
+			NewElement().Neg(Value(i).ToFieldElement()),
+			one.Clone(),
+		})
+		z = z.Mul(root)
+	}
+	// p / z  should give h(x) without any remainder
+	_, rem := p.Div2(z)
+	require.True(t, len(rem.Normalize()) == 0)
+}
+
+func TestAlgebraPolyMul(t *testing.T) {
 	// p1(x) = 1 + 2x
 	var p1 Poly = []Element{
 		Value(1).ToFieldElement(),
@@ -37,7 +87,7 @@ func TestPolyMul(t *testing.T) {
 	}
 }
 
-func TestPolyAdd(t *testing.T) {
+func TestAlgebraPolyAdd(t *testing.T) {
 	type TestVector struct {
 		A Poly
 		B Poly
@@ -60,13 +110,14 @@ func TestPolyAdd(t *testing.T) {
 		res := tv.A.Add(tv.B)
 		// test for homomorphism
 		// A(x) + B(x) = (A + B)(x)
-		exp := tv.A.Eval(x)
-		exp = exp.Add(exp, tv.B.Eval(x))
-		require.Equal(t, res.Eval(x), exp, "failed at row %d", row)
+		xf := Value(x).ToFieldElement()
+		exp := tv.A.Eval(xf)
+		exp = exp.Add(exp, tv.B.Eval(xf))
+		require.Equal(t, res.Eval(xf), exp, "failed at row %d", row)
 	}
 }
 
-func TestMatrixTranspose(t *testing.T) {
+func TestAlgebraMatrixTranspose(t *testing.T) {
 	var m Matrix = Matrix([]Vector{
 		Vector([]Value{Value(1), Value(2), Value(3), Value(4)}),
 		Vector([]Value{Value(5), Value(6), Value(7), Value(8)}),
@@ -85,7 +136,7 @@ func TestMatrixTranspose(t *testing.T) {
 	require.Equal(t, exp, tm)
 }
 
-func TestPolyDivManual(t *testing.T) {
+func TestAlgebraPolyDivManual(t *testing.T) {
 	// p2(x) = 1 + 2x
 	p2 := Poly([]Element{
 		Value(1).ToFieldElement(),
@@ -108,7 +159,7 @@ func TestPolyDivManual(t *testing.T) {
 	require.Equal(t, len(expR.Normalize()), 0)
 }
 
-func TestPolyDiv(t *testing.T) {
+func TestAlgebraPolyDiv(t *testing.T) {
 	p1 := randomPoly(5)
 	p2 := randomPoly(4)
 	// p1 = q * p2 + r
@@ -117,6 +168,14 @@ func TestPolyDiv(t *testing.T) {
 	// so p2 * q + r <=> p1
 	exp := q.Mul(p2).Add(r)
 	require.True(t, p1.Equal(exp))
+
+	h := Poly([]Element{Value(2).ToFieldElement(), Value(2).ToFieldElement()})
+	// hp1 = p1 * h
+	hp1 := p1.Mul(h)
+	// q = hp1 / h = p1
+	exp1, rem := hp1.Div2(h)
+	require.True(t, exp1.Equal(p1))
+	require.True(t, len(rem.Normalize()) == 0)
 }
 
 func randomPoly(d int) Poly {
