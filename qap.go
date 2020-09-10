@@ -9,9 +9,13 @@ import (
 // the number of variables.
 type QAP struct {
 	nbGates int
-	left    []Poly
-	right   []Poly
-	out     []Poly
+	nbVars  int
+	// left right and out
+	left  []Poly
+	right []Poly
+	out   []Poly
+	// z is the minimal polynomial
+	z Poly
 }
 
 // ToQAP takes a R1CS circuit description and turns it into its polynomial QAP
@@ -24,11 +28,30 @@ func ToQAP(circuit R1CS) QAP {
 	left := qapInterpolate(circuit.left)
 	right := qapInterpolate(circuit.right)
 	out := qapInterpolate(circuit.out)
+	nbVar := len(circuit.vars)
+	nbGates := len(circuit.left)
+	var z Poly
+	for i := 1; i <= nbGates; i++ {
+		// you multiply by (x - i) with i being as high as the number of gates,
+		// because the polynomials left,right and out vanishes on these inputs
+		// -i + x
+		xi := Poly([]Element{
+			NewElement().Neg(Value(i).ToFieldElement()),
+			one.Clone(),
+		})
+		if z == nil {
+			z = xi
+		} else {
+			z = z.Mul(xi)
+		}
+	}
 	return QAP{
-		nbGates: len(circuit.left),
+		nbVars:  nbVar,
+		nbGates: nbGates,
 		left:    left,
 		right:   right,
 		out:     out,
+		z:       z,
 	}
 }
 
@@ -37,10 +60,11 @@ func qapInterpolate(m Matrix) []Poly {
 	// variable at each step of the circuit
 	// so for example, all the assignements on the lefts inputs look like this
 	// in R1CS:
-	// [0, 1, 0, 0, 0, 0]
-	// [0, 0, 0, 1, 0, 0]
-	// [0, 1, 0, 0, 1, 0]
-	// [5, 0, 0, 0, 0, 1]
+	//  c  x out v  u  w
+	// [0, 1, 0, 0, 0, 0] g1
+	// [0, 0, 0, 1, 0, 0] g2
+	// [0, 1, 0, 0, 1, 0] g3
+	// [5, 0, 0, 0, 0, 1] g4
 	// so for example the second row of the transposed matrix represents all the
 	// usage of the variable "x" as a left wire in the circuit -> [1,0,1,0]
 	// Then we need to interpolate this as a polynomial such that:
@@ -111,30 +135,13 @@ func (q *QAP) IsValid(sol Vector) bool {
 		out = out.Add(q.out[varIndex].Mul(polyVal))
 	}
 
-	// create Z(x) = 1 so we can multiply it easily afterwards
-	var z Poly
-	for i := 1; i <= q.nbGates; i++ {
-		// you multiply by (x - i) with i being as high as the number of gates,
-		// because the polynomials left,right and out vanishes on these inputs
-		// -i + x
-		xi := Poly([]Element{
-			NewElement().Neg(Value(i).ToFieldElement()),
-			one.Clone(),
-		})
-		if z == nil {
-			z = xi
-		} else {
-			z = z.Mul(xi)
-		}
-	}
-
 	// Now we are using these precedent polynomials in the satisfying equation
 	// t(x) = left(x) * right(x) - out(x) = h(x)z(x)
 	t := left.Mul(right).Sub(out)
 
 	// now we try to verify if the equation is really satisfied by dividing eq /
 	// z(x) : we should find no remainder
-	_, rem := t.Div2(z)
+	_, rem := t.Div2(q.z)
 	if len(rem.Normalize()) > 0 {
 		return false
 	}
