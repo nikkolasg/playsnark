@@ -8,13 +8,10 @@ import (
 // and outputs polynomials. There are exactly n polynomials for each, where n is
 // the number of variables.
 type QAP struct {
-	nbGates  int
-	left     []Poly
-	right    []Poly
-	out      []Poly
-	aggLeft  Poly
-	aggRight Poly
-	aggOut   Poly
+	nbGates int
+	left    []Poly
+	right   []Poly
+	out     []Poly
 }
 
 // ToQAP takes a R1CS circuit description and turns it into its polynomial QAP
@@ -74,7 +71,7 @@ func toPoly(s *share.PriPoly) Poly {
 // h = t/z with no remainder ! if there is no remainder, that means
 // the polynomial t vanishes on all the points corresponding to the gate since
 // z is a factor, hence the solution is correct
-func (q *QAP) ProcessSolution(sol Vector) {
+func (q *QAP) IsValid(sol Vector) bool {
 	q.sanityCheck(sol)
 	// We need to multiply each entry of the solution with the corresponding
 	// polynomial.
@@ -113,12 +110,7 @@ func (q *QAP) ProcessSolution(sol Vector) {
 		right = right.Add(q.right[varIndex].Mul(polyVal))
 		out = out.Add(q.out[varIndex].Mul(polyVal))
 	}
-	q.aggLeft = left
-	q.aggRight = right
-	q.aggOut = out
-}
 
-func (q *QAP) IsValid() bool {
 	// create Z(x) = 1 so we can multiply it easily afterwards
 	var z Poly
 	for i := 1; i <= q.nbGates; i++ {
@@ -138,7 +130,7 @@ func (q *QAP) IsValid() bool {
 
 	// Now we are using these precedent polynomials in the satisfying equation
 	// t(x) = left(x) * right(x) - out(x) = h(x)z(x)
-	t := q.aggLeft.Mul(q.aggRight).Sub(q.aggOut)
+	t := left.Mul(right).Sub(out)
 
 	// now we try to verify if the equation is really satisfied by dividing eq /
 	// z(x) : we should find no remainder

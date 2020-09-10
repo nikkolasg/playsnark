@@ -64,27 +64,5 @@ func TestQAPValidity(t *testing.T) {
 	s := createWitness()
 	r1cs := createR1CS()
 	qap := ToQAP(r1cs)
-	qap.ProcessSolution(s)
-
-	// Similar to the previous test, but now simpler by first creating the
-	// "equation polynomial": left * right - out = 0 and then evaluating at all
-	// the gates indices we have, it should be 0
-	eq := qap.aggLeft.Mul(qap.aggRight).Sub(qap.aggOut)
-	var z Poly
-	for gate := 1; gate <= qap.nbGates; gate++ {
-		gateF := Value(gate).ToFieldElement()
-		require.True(t, eq.Eval(gateF).Equal(zero))
-		minusi := NewElement().Neg(Value(gate).ToFieldElement())
-		// -i + x
-		xi := Poly([]Element{minusi, NewElement().One()})
-		if z == nil {
-			z = xi
-			require.True(t, z.Eval(gateF).Equal(zero))
-		} else {
-			z = z.Mul(xi)
-		}
-	}
-	_, rem := eq.Div2(z)
-	require.True(t, len(rem.Normalize()) == 0)
-	require.True(t, qap.IsValid())
+	require.True(t, qap.IsValid(s))
 }
