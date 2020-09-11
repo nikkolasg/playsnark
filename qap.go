@@ -133,16 +133,7 @@ func (q *QAP) IsValid(sol Vector) bool {
 	//   first gate, second term will give the value of the input "x" at the
 	//   first gate etc leading to the same values as in R1CS.
 	// Left one
-	left := Poly([]Element{})
-	right := Poly([]Element{})
-	out := Poly([]Element{})
-	for varIndex, val := range sol {
-		polyVal := Poly([]Element{val.ToFieldElement()})
-		left = left.Add(q.left[varIndex].Mul(polyVal))
-		right = right.Add(q.right[varIndex].Mul(polyVal))
-		out = out.Add(q.out[varIndex].Mul(polyVal))
-	}
-
+	left, right, out := q.computeAggregatePoly(sol)
 	// Now we are using these precedent polynomials in the satisfying equation
 	// t(x) = left(x) * right(x) - out(x) = h(x)z(x)
 	t := left.Mul(right).Sub(out)
@@ -154,6 +145,19 @@ func (q *QAP) IsValid(sol Vector) bool {
 		return false
 	}
 	return true
+}
+
+func (q QAP) computeAggregatePoly(sol Vector) (left Poly, right Poly, out Poly) {
+	left = Poly([]Element{})
+	right = Poly([]Element{})
+	out = Poly([]Element{})
+	for varIndex, val := range sol {
+		polyVal := Poly([]Element{val.ToFieldElement()})
+		left = left.Add(q.left[varIndex].Mul(polyVal))
+		right = right.Add(q.right[varIndex].Mul(polyVal))
+		out = out.Add(q.out[varIndex].Mul(polyVal))
+	}
+	return
 }
 
 func (q QAP) sanityCheck(sol Vector) {

@@ -18,6 +18,18 @@ func TestAlgebraEval(t *testing.T) {
 	require.True(t, res.Equal(exp))
 }
 
+func TestAlgebraBlindEval(t *testing.T) {
+	var d = 4
+	var p = randomPoly(4)
+	var x = NewElement().Pick(random.New())
+	var px = p.Eval(x)
+	var gpx = NewCommit().Mul(px, nil)
+
+	var blindedPoints = generatePowersCommit(x, one, d)
+	var res = p.BlindEval(blindedPoints)
+	require.True(t, gpx.Equal(res))
+}
+
 func TestAlgebraInterpolate(t *testing.T) {
 	var r = randomPoly(4)
 	p := Interpolate([]Element(r))

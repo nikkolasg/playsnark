@@ -319,3 +319,20 @@ func lagrangeBasis(g kyber.Group, i int, xs map[int]Element) Poly {
 	}
 	return basis
 }
+
+// blindEvaluation takes a polynomial p(x) and a list of blinded points {s}
+// such that the i-th value in blindedPoint is equal to s^i, s being unknown
+// from the trusted setup.
+// the result is SUM( g^(s^i)^p[i] ) <=> (in addition form) SUM(p[i] * (s^i * g)
+// which is equivalent to g^p(s)
+func (p Poly) BlindEval(blindedPoint []Commit) Commit {
+	if len(p) != len(blindedPoint) {
+		panic("mismatch of length between poly and blinded eval points")
+	}
+	var acc = NewCommit().Null()
+	var tmp = NewCommit()
+	for i := 0; i < len(p); i++ {
+		acc = acc.Add(acc, tmp.Mul(p[i], blindedPoint[i]))
+	}
+	return acc
+}

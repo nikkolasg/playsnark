@@ -117,21 +117,86 @@ func NewTrustedSetup(qap QAP) TrustedSetup {
 	ts := qap.z.Eval(s)
 	// g_y^t(s)
 	vk.yts = NewCommit().Mul(ts, nil)
-	// g^(v_k(s)) for all k
-	vk.vs = generateEvalCommit(gv, qap.left, s, one)
-	vk.ws = generateEvalCommit(gw, qap.right, s, one)
-	vk.ys = generateEvalCommit(gy, qap.out, s, one)
+	// g^(v_k(s)) for all k AND g^(v_0(s)) where v(0) = 1 so it's equal to g
+	vk.vs = append([]Commit{gv}, generateEvalCommit(gv, qap.left, s, one)...)
+	vk.ws = append([]Commit{gw}, generateEvalCommit(gw, qap.right, s, one)...)
+	vk.ys = append([]Commit{gy}, generateEvalCommit(gy, qap.out, s, one)...)
 	return TrustedSetup{
 		EK: ek,
 		VK: vk,
 	}
 }
 
+// Proof contains all the information computed by a prover with the
+// EvaluationKey and a circuit and its witness
+type Proof struct {
+	// g^(SUM v_k(s)) for non-IO k
+	vss Commit
+	// same this as vss but shifted by alpha_v: g^[alpha_v* (SUM * v_k(s))]
+	vass Commit
+	// Same things as vss but shifted by beta
+	vbss Commit
+
+	// g^(SUM w_k(s)) for non-IO k
+	wss Commit
+	// same this as wss but shifted by alpha_w: g^[alpha_w* (SUM * w_k(s))]
+	wass Commit
+
+	// g^(SUM y_k(s)) for non-IO k
+	yss Commit
+	// same this as yss but shifted by alpha_y: g^[alpha_y* (SUM * y_k(s))]
+	yass Commit
+
+	// g^h(s) where h is one of the product of p(x): p(x) = t(x) * h(x)
+	hs Commit
+}
+
+func GenProof(setup TrustedSetup, qap QAP, solution Vector) Proof {
+	// compute h(x) then evaluate it blindly at point s
+	left, right, out := qap.computeAggregatePoly(solution)
+	// p(x) = t(x) * h(x)
+	px := left.Mul(right).Sub(out)
+	// h(x) = p(x) / t(x)
+	hx, rem := px.Div2(qap.z)
+	if len(rem.Normalize()) > 0 {
+		panic("apocalypse")
+	}
+	// g^h(s)
+	ghs := hx.BlindEval(setup.EK.gsi)
+	return Proof{
+		hs: ghs,
+	}
+}
+
+func VerifyProof(setup TrustedSetup, qap QAP, p Proof) bool {
+	return true
+}
+
+// combineIOAndIntermediate combines the input/output polynomials not yet
+// blindly evaluated at s, and the intermediate variables polynomials that the
+// prover created in the proof. Bringing the two together allows to fully
+// evaluate all the variables values at any point (for the left, or right or
+// output wire of the gates)
+// NOTE: in the paper, they use this p_0(s) polynomial as a constant before the
+// sum but don't define it anywhere ? so far it's ignored, the math works out
+// fine
+func combineIOAndIntermediate(io []Poly, blindPoints, nonIO []Commit) Commit {
+	var acc = NewCommit().Null()
+	for _, pio := range io {
+		acc = acc.Add(acc, pio.BlindEval(blindPoints))
+	}
+	for _, nio := range nonIO {
+		acc = acc.Add(acc, nio)
+	}
+	return acc
+}
+
+// generatePowersCommit returns { shift * s^i} for i=0...power included
 func generatePowersCommit(e Element, shift Element, power int) []Commit {
 	var gi = make([]Commit, 0, power+1)
 	gi = append(gi, NewCommit())
 	var tmp = one.Clone()
-	for i := 0; i <= power; i++ {
+	for i := 0; i < power; i++ {
 		tmp = tmp.Mul(tmp, e)
 		tmp = tmp.Mul(tmp, shift)
 		gi = append(gi, NewCommit().Mul(tmp, nil))
