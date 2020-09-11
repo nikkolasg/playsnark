@@ -8,8 +8,16 @@ import (
 // and outputs polynomials. There are exactly n polynomials for each, where n is
 // the number of variables.
 type QAP struct {
+	// in pinocchio paper, this is the variable m
+	// the paper decomposes this into input/output variables
+	// with N = n + n' where n is input and n' is output
+	// then we have all variables = {1...N, N+1 ... m} - it contains the
+	// intermediate variables
+	nbVars int
+	// nbIO is N in the previous comment
+	nbIO int
+	// nbGates is the variable "d" in the pinochio paper
 	nbGates int
-	nbVars  int
 	// left right and out
 	left  []Poly
 	right []Poly

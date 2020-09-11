@@ -17,3 +17,7 @@ func (v Value) ToFieldElement() Element {
 func NewElement() Element {
 	return Group.Scalar().Zero()
 }
+
+func NewCommit() Commit {
+	return Group.Point().Base()
+}

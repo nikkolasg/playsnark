@@ -22,12 +22,14 @@ func newVar(i int, name string) Var {
 // out = w + 5
 type Variables []Var
 
-func createVariables() Variables {
+// createVariables returns the indexes of the variables and the number of input
+// output variables
+func createVariables() (Variables, int) {
 	var ordering []Var
 	for i, name := range []string{"const", "x", "out", "u", "v", "w"} {
 		ordering = append(ordering, newVar(i, name))
 	}
-	return ordering
+	return ordering, 3
 }
 
 func (v *Variables) IndexOf(name string) int {
@@ -75,7 +77,7 @@ func (v *Variables) ConstraintOn(names ...string) Vector {
 // variable "v" is 27 because it's ux3
 // variable "w" is 30 because it v + x = 27 + 3
 func createWitness() Vector {
-	vars := createVariables()
+	vars, _ := createVariables()
 	nbVars := len(vars)
 	solution := make(Vector, nbVars)
 	solution[vars.IndexOf("const")] = 1
@@ -92,6 +94,7 @@ func createWitness() Vector {
 // <left,s> * <right,s> - <out,s> = 0 is satisfied.
 type R1CS struct {
 	vars  Variables
+	nbIO  int
 	left  Matrix
 	right Matrix
 	out   Matrix
@@ -100,7 +103,7 @@ type R1CS struct {
 // createR1CS returns the R1CS for the problem we consider
 // x^3 + x + 5 = 35 using the variables described as in "createVariables"
 func createR1CS() R1CS {
-	variables := createVariables()
+	variables, _ := createVariables()
 	// We create a list of vector, i.e. a matrix
 	// for all the left, right and out output
 	var left, right, out Matrix
