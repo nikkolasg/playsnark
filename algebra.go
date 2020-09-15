@@ -1,6 +1,7 @@
 package playsnark
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/drand/kyber"
@@ -324,6 +325,7 @@ func lagrangeBasis(g kyber.Group, i int, xs map[int]Element) Poly {
 // which is equivalent to g^p(s)
 func (p Poly) BlindEval(zero Commit, blindedPoint []Commit) Commit {
 	if len(p) != len(blindedPoint) {
+		fmt.Println("len(p)", len(p), " - len(blindepoints)", len(blindedPoint))
 		panic("mismatch of length between poly and blinded eval points")
 	}
 	var acc = zero.Clone()

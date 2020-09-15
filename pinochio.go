@@ -1,6 +1,8 @@
 package playsnark
 
-import "github.com/drand/kyber/util/random"
+import (
+	"github.com/drand/kyber/util/random"
+)
 
 // TrustedSetup contains the information needed for a prover and a verifier.
 type TrustedSetup struct {
@@ -23,7 +25,7 @@ type EvalKey struct {
 	was []G2
 	yas []G1
 
-	// g^s^i
+	// g^s^i for i=1...#ofgates (inclusive)
 	gsi []G1
 
 	// g_v^(b * v_k(s))
@@ -119,7 +121,7 @@ func NewTrustedSetup(qap QAP) TrustedSetup {
 	// evaluation of the minimal polynomial at the unknonw index s
 	ts := qap.z.Eval(s)
 	// g_y^t(s)
-	vk.yts = NewG1().Mul(ts, nil)
+	vk.yts = NewG2().Mul(ts, nil)
 	// g^(v_k(s)) for all k AND g^(v_0(s)) where v(0) = 1 so it's equal to g
 	vk.vs = append([]Commit{gv}, generateEvalCommit(gv, qap.left, s, one)...)
 	vk.ws = append([]Commit{gw}, generateEvalCommit(gw, qap.right, s, one)...)
@@ -164,7 +166,12 @@ func GenProof(setup TrustedSetup, qap QAP, solution Vector) Proof {
 		panic("apocalypse")
 	}
 	// g^h(s)
-	ghs := hx.BlindEval(zeroG1, setup.EK.gsi)
+	//ghs := hx.BlindEval(zeroG1, setup.EK.gsi)
+	ghs := zeroG1
+	var tmp = zeroG1.Clone()
+	for i, gsi := range setup.EK.gsi {
+		ghs = ghs.Add(ghs, tmp.Mul(hx.Eval(Value(i).ToFieldElement()), gsi))
+	}
 	diff := qap.nbVars - qap.nbIO
 	// compute g^(SUM v_k(s) * sol[k]) for k being NON IO
 	computeSolCommit := func(zero Commit, evalCommit []Commit) Commit {
@@ -197,7 +204,8 @@ func VerifyProof(vk VerificationKey, qap QAP, p Proof, io Vector) bool {
 	diff := qap.nbVars - qap.nbIO
 	evalCommit := func(base Commit, poly []Commit) Commit {
 		var acc = base.Clone().Null()
-		for i, gs := range vk.vs[:diff] {
+		var tmp = base.Clone()
+		for i, gs := range poly {
 			// commitment of the evaluation of the polynomial (v,w, and y) to
 			// the power of the coefficient of the solution vector (just the
 			// public part, input / output)
@@ -205,14 +213,14 @@ func VerifyProof(vk VerificationKey, qap QAP, p Proof, io Vector) bool {
 			// evaluation of the aggregated polynomial as in the QAP case to a
 			// random point s
 			// (g^v_k(s)) ^ c_k
-			tmp := base.Clone().Mul(io[i].ToFieldElement(), gs)
+			tmp := tmp.Mul(io[i].ToFieldElement(), gs)
 			acc = acc.Add(acc, tmp)
 		}
 		return acc
 	}
 	gvkio := evalCommit(zeroG1, vk.vs[:diff])
 	gwkio := evalCommit(zeroG2, vk.ws[:diff])
-	gykio := evalCommit(zeroG2, vk.ys[:diff])
+	gykio := evalCommit(zeroG1, vk.ys[:diff])
 
 	// g_v_io(s) * g_v_mid(s)
 	// first term is reconstructed above from the verification key and the
@@ -231,7 +239,7 @@ func VerifyProof(vk VerificationKey, qap QAP, p Proof, io Vector) bool {
 	left := Pair(gv, gw)
 	// e(g^t(s) , g^h(s)) = e(g1,g2)^(t(s) * h(s))
 	//					  = e(g1,g2)^p(s)
-	right1 := Pair(vk.yts, p.hs)
+	right1 := Pair(p.hs, vk.yts)
 	// e(g1^(r_y * y(s)), g2)
 	right2 := Pair(gy, zeroG2.Clone().Base())
 	right := zeroGT.Clone().Add(right1, right2)

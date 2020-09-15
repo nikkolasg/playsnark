@@ -18,3 +18,13 @@ func TestPinocchioCombine(t *testing.T) {
 	var res = p.BlindEval(zeroG1, blindedPoints)
 	require.True(t, gpx.Equal(res))
 }
+
+func TestPinocchioValidProof(t *testing.T) {
+	s := createWitness()
+	r1cs := createR1CS()
+	qap := ToQAP(r1cs)
+	diff := qap.nbVars - qap.nbIO
+	setup := NewTrustedSetup(qap)
+	proof := GenProof(setup, qap, s)
+	require.True(t, VerifyProof(setup.VK, qap, proof, s[:diff]))
+}
