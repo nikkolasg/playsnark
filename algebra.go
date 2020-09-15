@@ -98,9 +98,6 @@ func (p Poly) Eval(i Element) Element {
 	return v
 }
 
-var zero = NewElement()
-var one = NewElement().SetInt64(1)
-
 // Div returns the quotient p / p2 and the remainder using polynomial synthetic
 // division
 func (p Poly) Div(p2 Poly) (q Poly, r Poly) {
@@ -325,12 +322,12 @@ func lagrangeBasis(g kyber.Group, i int, xs map[int]Element) Poly {
 // from the trusted setup.
 // the result is SUM( g^(s^i)^p[i] ) <=> (in addition form) SUM(p[i] * (s^i * g)
 // which is equivalent to g^p(s)
-func (p Poly) BlindEval(blindedPoint []Commit) Commit {
+func (p Poly) BlindEval(zero Commit, blindedPoint []Commit) Commit {
 	if len(p) != len(blindedPoint) {
 		panic("mismatch of length between poly and blinded eval points")
 	}
-	var acc = NewCommit().Null()
-	var tmp = NewCommit()
+	var acc = zero.Clone()
+	var tmp = zero.Clone()
 	for i := 0; i < len(p); i++ {
 		acc = acc.Add(acc, tmp.Mul(p[i], blindedPoint[i]))
 	}

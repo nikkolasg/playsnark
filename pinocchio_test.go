@@ -1,0 +1,20 @@
+package playsnark
+
+import (
+	"testing"
+
+	"github.com/drand/kyber/util/random"
+	"github.com/stretchr/testify/require"
+)
+
+func TestPinocchioCombine(t *testing.T) {
+	var d = 4
+	var p = randomPoly(4)
+	var x = NewElement().Pick(random.New())
+	var px = p.Eval(x)
+	var gpx = NewG1().Mul(px, nil)
+
+	var blindedPoints = generatePowersCommit(zeroG1, x, one, d)
+	var res = p.BlindEval(zeroG1, blindedPoints)
+	require.True(t, gpx.Equal(res))
+}

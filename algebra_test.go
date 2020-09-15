@@ -23,10 +23,10 @@ func TestAlgebraBlindEval(t *testing.T) {
 	var p = randomPoly(4)
 	var x = NewElement().Pick(random.New())
 	var px = p.Eval(x)
-	var gpx = NewCommit().Mul(px, nil)
+	var gpx = NewG1().Mul(px, nil)
 
-	var blindedPoints = generatePowersCommit(x, one, d)
-	var res = p.BlindEval(blindedPoints)
+	var blindedPoints = generatePowersCommit(zeroG1, x, one, d)
+	var res = p.BlindEval(zeroG1, blindedPoints)
 	require.True(t, gpx.Equal(res))
 }
 
