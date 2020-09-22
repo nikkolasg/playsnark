@@ -28,10 +28,6 @@ There are two additional files as well:
 * `curve.go` contains the code defining the curve we use, the points and the generators
 * `algebra.go` contains some logic related to matrices, vectors, polynomials needed in the r1cs and QAP modules.
 
-## Future
-
-I started this project merely as a self learning tool but I might continue to develop other proof systems in the future as time permits.
-
 ## Resources
 
 Well the first one I used is the series of [Vitalik blog post](https://medium.com/@VitalikButerin/quadratic-arithmetic-programs-from-zero-to-hero-f6d558cea649), then I looked at this more technical small [paper](https://chriseth.github.io/notes/articles/zksnarks/zksnarks.pdf) and finally to implement correctly the Pinocchio proof system I used the original [paper](https://eprint.iacr.org/2013/879.pdf) as well as the [paper](https://eprint.iacr.org/2013/879.pdf) derived after that succintly describes the algorithm using an asymmetric pairing from Ben-Sasson, Chiesa, Tromer and Virza.
