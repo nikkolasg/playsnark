@@ -1,6 +1,7 @@
 package playsnark
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -65,4 +66,15 @@ func TestQAPValidity(t *testing.T) {
 	r1cs := createR1CS()
 	qap := ToQAP(r1cs)
 	require.True(t, qap.IsValid(s))
+	fmt.Println(qap.nbGates)
+	fmt.Println(qap.right)
+}
+
+func TestQAPInterpolate(t *testing.T) {
+	_ = createWitness()
+	r1cs := createR1CS()
+	fmt.Println(r1cs.out)
+	polys := qapInterpolate(r1cs.out)
+	fmt.Println(polys)
+
 }

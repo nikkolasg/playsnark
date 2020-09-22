@@ -142,5 +142,7 @@ func createR1CS() R1CS {
 		left:  left,
 		right: right,
 		out:   out,
+		// "const", "x", and "out"
+		nbIO: 3,
 	}
 }

@@ -1,6 +1,7 @@
 package playsnark
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/drand/kyber/util/random"
@@ -192,4 +193,71 @@ func TestPinocchioProofValidDivision(t *testing.T) {
 	// which is the QAP equation
 	require.True(t, leftS.Equal(rightS))
 	require.True(t, VerifyProof(setup.VK, qap, proof, s[:diff]))
+}
+
+func TestPinocchioInvalidProof(t *testing.T) {
+	s := createWitness()
+	r1cs := createR1CS()
+	qap := ToQAP(r1cs)
+	diff := qap.nbVars - qap.nbIO
+	setup := NewTrustedSetup(qap)
+	proof := GenProof(setup, qap, s)
+	fmt.Println(proof.String())
+
+	// left is e(g^(a_v*v(s) + a_w*w(s) + a_y *y(s)) * beta,g^gamma)
+	left := Pair(proof.gz, setup.VK.gamma)
+	var vkio = NewElement()
+	for i, wk := range qap.left[diff:] {
+		vkio.Add(vkio, NewElement().Mul(wk.Eval(setup.t.s), s[i+diff].ToFieldElement()))
+	}
+	var avvs = NewG1().Mul(NewElement().Mul(vkio, setup.t.rv), nil)
+
+	var wkio = NewElement()
+	for i, wk := range qap.right[diff:] {
+		wkio.Add(wkio, NewElement().Mul(wk.Eval(setup.t.s), s[i+diff].ToFieldElement()))
+	}
+	var awws = NewG1().Mul(NewElement().Mul(wkio, setup.t.rw), nil)
+	var ykio = NewElement()
+	for i, wk := range qap.out[diff:] {
+		ykio.Add(ykio, NewElement().Mul(wk.Eval(setup.t.s), s[i+diff].ToFieldElement()))
+	}
+	var ayys = NewG1().Mul(NewElement().Mul(ykio, setup.t.ry), nil)
+	ball := NewG1().Add(avvs, NewG1().Add(awws, ayys))
+	ball = ball.Mul(setup.t.beta, ball)
+	require.True(t, ball.Equal(proof.gz))
+
+	expLeft := Pair(ball, setup.VK.gamma)
+	require.True(t, left.Equal(expLeft))
+
+	// t1 := e(g^(a_v*v(s)) * g^(a_y*y(s)), g^beta*gamma)
+	// t2 := e(g^beta*gamma, g^(a_w*w(s))
+	// right = t1*t2 = left !
+	lt1 := NewG1().Add(proof.vss, proof.yss)
+	t1 := Pair(lt1, setup.VK.bgamma2)
+	t2 := Pair(setup.VK.bgamma, proof.wss)
+	right := zeroGT.Clone().Add(t1, t2)
+	require.True(t, right.Equal(left))
+
+	require.True(t, VerifyProof(setup.VK, qap, proof, s[:diff]))
+
+	p2 := proof
+	p2.yss = NewG1().Pick(random.New())
+	require.False(t, VerifyProof(setup.VK, qap, p2, s[:diff]))
+
+	p2 = proof
+	p2.vss = NewG1().Pick(random.New())
+	require.False(t, VerifyProof(setup.VK, qap, p2, s[:diff]))
+
+	p2 = proof
+	p2.wss = NewG2().Pick(random.New())
+	require.False(t, VerifyProof(setup.VK, qap, p2, s[:diff]))
+
+	p2 = proof
+	p2.hs = NewG1().Pick(random.New())
+	require.False(t, VerifyProof(setup.VK, qap, p2, s[:diff]))
+
+	p2 = proof
+	p2.gz = NewG1().Pick(random.New())
+	require.False(t, VerifyProof(setup.VK, qap, p2, s[:diff]))
+
 }

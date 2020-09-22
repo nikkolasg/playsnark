@@ -1,6 +1,9 @@
 package playsnark
 
 import (
+	"bytes"
+	"fmt"
+
 	"github.com/drand/kyber/util/random"
 )
 
@@ -14,13 +17,14 @@ type TrustedSetup struct {
 // ToxicWaste contains the information that should be deleted after a trusted
 // setup but that we keep it here for testing reason.
 type ToxicWaste struct {
-	s  Element
-	ry Element
-	rv Element
-	rw Element
-	gv G1
-	gw G2
-	gy G1
+	s    Element
+	beta Element
+	rv   Element
+	rw   Element
+	ry   Element
+	gv   G1
+	gw   G2
+	gy   G1
 }
 
 // EvalKey contains the information of the trusted setup needed for the prove to
@@ -62,6 +66,8 @@ type VerificationKey struct {
 	gamma G2
 	// g^(beta * gamma) in G1
 	bgamma G1
+	// same but in G2 (optimization from https://eprint.iacr.org/2013/879.pdf
+	bgamma2 G2
 	// g_y^(t(s)) where t is the minimal polynomial
 	yts G2
 
@@ -104,20 +110,21 @@ func NewTrustedSetup(qap QAP) TrustedSetup {
 	// the part of the CRS with a polynomial to build up its proof
 	diff := qap.nbVars - qap.nbIO
 	ek.vs = generateEvalCommit(gv, qap.left[diff:], s, one)
+	fmt.Println(len(qap.out), " vs ", diff)
 	ek.ws = generateEvalCommit(gw, qap.right[diff:], s, one)
-	ek.ys = generateEvalCommit(gy, qap.right[diff:], s, one)
+	ek.ys = generateEvalCommit(gy, qap.out[diff:], s, one)
 	// compute the same evaluation but shifted by their respective alpha
 	ek.vas = generateEvalCommit(gv, qap.left[diff:], s, av)
 	ek.was = generateEvalCommit(g1w, qap.right[diff:], s, aw)
-	ek.yas = generateEvalCommit(gy, qap.right[diff:], s, ay)
+	ek.yas = generateEvalCommit(gy, qap.out[diff:], s, ay)
 
 	// Beta and gamma are used to check that same coefficients - same
 	// polynomials - were used during the linear combination
 	beta := NewElement().Pick(random.New())
 	// we now evaluate the commitments of the polynomials shifted by beta
 	ek.vbs = generateEvalCommit(gv, qap.left[diff:], s, beta)
-	ek.wbs = generateEvalCommit(gv, qap.right[diff:], s, beta)
-	ek.ybs = generateEvalCommit(gv, qap.out[diff:], s, beta)
+	ek.wbs = generateEvalCommit(g1w, qap.right[diff:], s, beta)
+	ek.ybs = generateEvalCommit(gy, qap.out[diff:], s, beta)
 
 	gamma := NewElement().Pick(random.New())
 	bgamma := NewElement().Mul(gamma, beta)
@@ -130,9 +137,10 @@ func NewTrustedSetup(qap QAP) TrustedSetup {
 	// g^alpha_y
 	vk.ay = NewG2().Mul(ay, nil)
 	// g^gamma
-	vk.gamma = NewG1().Mul(gamma, nil)
+	vk.gamma = NewG2().Mul(gamma, nil)
 	// g^(beta*gamma)
 	vk.bgamma = NewG1().Mul(bgamma, nil)
+	vk.bgamma2 = NewG2().Mul(bgamma, nil)
 	// evaluation of the minimal polynomial at the unknonw index s
 	ts := qap.z.Eval(s)
 	// t(s) * (r_y * G2)
@@ -145,13 +153,14 @@ func NewTrustedSetup(qap QAP) TrustedSetup {
 		EK: ek,
 		VK: vk,
 		t: ToxicWaste{
-			s:  s,
-			gv: gv,
-			gw: gw,
-			gy: gy,
-			ry: ry,
-			rv: rv,
-			rw: rw,
+			beta: beta,
+			s:    s,
+			gv:   gv,
+			gw:   gw,
+			gy:   gy,
+			ry:   ry,
+			rv:   rv,
+			rw:   rw,
 		},
 	}
 }
@@ -163,11 +172,11 @@ type Proof struct {
 	vss G1
 	// same this as vss but shifted by alpha_v: g^[alpha_v* (SUM * v_k(s))]
 	vass G1
-	// Same things as vss but shifted by beta
-	vbss Commit
 	// g^(SUM w_k(s)) for non-IO k
-	wss G1
+	wss G2
 	// same this as wss but shifted by alpha_w: g^[alpha_w* (SUM * w_k(s))]
+	// on G1, since we are in asymmetric pairing case
+	// https://eprint.iacr.org/2013/879.pdf
 	wass G1
 
 	// g^(SUM y_k(s)) for non-IO k
@@ -177,6 +186,10 @@ type Proof struct {
 
 	// g^h(s) where h is one of the product of p(x): p(x) = t(x) * h(x)
 	hs G1
+
+	// g^a_v * SUM v_k(s) * g^a_w * SUM w_k(s) * g^a_y * SUM y_k(s) for all non
+	// IO - used during the linear check
+	gz G1
 }
 
 func GenProof(setup TrustedSetup, qap QAP, solution Vector) Proof {
@@ -210,6 +223,12 @@ func GenProof(setup TrustedSetup, qap QAP, solution Vector) Proof {
 	gwamids := computeSolCommit(zeroG1, setup.EK.was)
 	gyamids := computeSolCommit(zeroG1, setup.EK.yas)
 
+	// g^(SUM sol[k] * v_k(s) * beta)
+	gvbmids := computeSolCommit(zeroG1, setup.EK.vbs)
+	gwbmids := computeSolCommit(zeroG1, setup.EK.wbs)
+	gybmids := computeSolCommit(zeroG1, setup.EK.ybs)
+	gz := NewG1().Add(gvbmids, NewG1().Add(gwbmids, gybmids))
+
 	return Proof{
 		hs:   ghs,
 		vss:  gvmids,
@@ -218,7 +237,29 @@ func GenProof(setup TrustedSetup, qap QAP, solution Vector) Proof {
 		vass: gvamids,
 		wass: gwamids,
 		yass: gyamids,
+		gz:   gz,
 	}
+}
+
+func (p *Proof) String() string {
+	var b bytes.Buffer
+	buff, _ := p.hs.MarshalBinary()
+	b.WriteString(fmt.Sprintf("hs: %x\n", buff))
+	buff, _ = p.vss.MarshalBinary()
+	b.WriteString(fmt.Sprintf("vss: %x\n", buff))
+	buff, _ = p.wss.MarshalBinary()
+	b.WriteString(fmt.Sprintf("wss: %x\n", buff))
+	buff, _ = p.yss.MarshalBinary()
+	b.WriteString(fmt.Sprintf("yss: %x\n", buff))
+	buff, _ = p.vass.MarshalBinary()
+	b.WriteString(fmt.Sprintf("vass: %x\n", buff))
+	buff, _ = p.wass.MarshalBinary()
+	b.WriteString(fmt.Sprintf("wass: %x\n", buff))
+	buff, _ = p.yass.MarshalBinary()
+	b.WriteString(fmt.Sprintf("yass: %x\n", buff))
+	buff, _ = p.gz.MarshalBinary()
+	b.WriteString(fmt.Sprintf("gz: %x\n", buff))
+	return b.String()
 }
 
 // VerifyProof runs the different consistency checks. It needs the trusted
@@ -267,29 +308,56 @@ func VerifyProof(vk VerificationKey, qap QAP, p Proof, io Vector) bool {
 			return false
 		}
 	}
-	// LINEAR COMBINATION CHECK: We check that the prover correctly used the
-	// g^v(s) etc to form its proof and not any other polynomial by forcing him
-	// to do a random linear combination with coefficients "glued" with the
-	// polynomials (v, w, y) in the CRS.
-	// --> we check that : e(g^a_v * v(s),g) = e(g^v(s),g^a_v)
-	// g^a_v * v(s), g^v(s) term is provided by prover, g^a_v by the CRS
-	left := Pair(p.vass, NewG2().Base())
-	right := Pair(p.vss, vk.av)
-	if !left.Equal(right) {
-		return false
+	{
+		// CRS CHECK: We check that the prover correctly used the
+		// g^v(s) from the CRS to form its proof, that they're the polynomials
+		// from the CRS
+		// To do this we have the "shifted" version with a_v a_w and a_y and thanks
+		// to the q power knowledge of exponent assumption, we can tell that the
+		// prover is unable to pick a polynomial v' instead of v where the  the
+		// following equation pass:
+		// e(g^a_v * v(s),g) = e(g^v(s),g^a_v)
+		// g^a_v * v(s), g^v(s) term is provided by prover, g^a_v by the CRS
+		left := Pair(p.vass, NewG2().Base())
+		right := Pair(p.vss, vk.av)
+		if !left.Equal(right) {
+			return false
+		}
+		// we do the same for W except here we computed the evaluation of g^w(s) on
+		// G2 so we switch the argument order
+		left = Pair(p.wass, NewG2().Base())
+		right = Pair(vk.aw, p.wss)
+		if !left.Equal(right) {
+			return false
+		}
+		// we do the same for Y as in V
+		left = Pair(p.yass, NewG2().Base())
+		right = Pair(p.yss, vk.ay)
+		if !left.Equal(right) {
+			return false
+		}
 	}
-	// we do the same for W except here we computed the evaluation of g^w(s) on
-	// G2 so we switch the argument order
-	left = Pair(p.wass, NewG2().Base())
-	right = Pair(vk.aw, p.wss)
-	if !left.Equal(right) {
-		return false
-	}
-	// we do the same for Y as in V
-	left = Pair(p.yass, NewG2().Base())
-	right = Pair(p.yss, vk.ay)
-	if !left.Equal(right) {
-		return false
+	{
+		// LINEAR CHECK: we also need to make sure that prover used the same valud
+		// into the variable for the three polys v w and y. Wo do this via a linear
+		// sum check with randomnized coefficient for each polynomial to avoid
+		// malleability.
+		// left is e(g^(a_v*v(s) + a_w*w(s) + a_y *y(s)) * beta,g^gamma)
+		left := Pair(p.gz, vk.gamma)
+		// right is splitted into two GT elements as an optimization of
+		// https://eprint.iacr.org/2013/879.pdf because of polynomial w which is in
+		// g2
+		// t1 := e(g^(a_v*v(s)) * g^(a_y*y(s)), g^beta*gamma)
+		// t2 := e(g^beta*gamma, g^(a_w*w(s))
+		// right = t1*t2 = left !
+		lt1 := NewG1().Add(p.vss, p.yss)
+		t1 := Pair(lt1, vk.bgamma2)
+		t2 := Pair(vk.bgamma, p.wss)
+		right := zeroGT.Clone().Add(t1, t2)
+		if !right.Equal(left) {
+			fmt.Println("damn")
+			return false
+		}
 	}
 	return true
 }
@@ -314,7 +382,7 @@ func generatePowersCommit(base Commit, e Element, shift Element, power int) []Co
 func generateEvalCommit(base Commit, polys []Poly, x, shift Element) []Commit {
 	var ret = make([]Commit, 0, len(polys))
 	for i := range polys {
-		tmp := polys[i].Eval(x)
+		tmp := polys[i].Normalize().Eval(x)
 		ret = append(ret, base.Clone().Mul(tmp.Mul(tmp, shift), base))
 	}
 	return ret

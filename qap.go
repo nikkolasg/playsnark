@@ -56,6 +56,7 @@ func ToQAP(circuit R1CS) QAP {
 	return QAP{
 		nbVars:  nbVar,
 		nbGates: nbGates,
+		nbIO:    circuit.nbIO,
 		left:    left,
 		right:   right,
 		out:     out,
