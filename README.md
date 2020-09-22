@@ -22,4 +22,6 @@ You can follow the code by first looking at:
   didn't cheat.
 
 
+## Resources
 
+Well the first one I used is the series of [Vitalik blog post](https://medium.com/@VitalikButerin/quadratic-arithmetic-programs-from-zero-to-hero-f6d558cea649), then I looked at this more technical small [paper](https://chriseth.github.io/notes/articles/zksnarks/zksnarks.pdf) and finally to implement correctly the Pinocchio proof system I used the original [paper](https://eprint.iacr.org/2013/879.pdf) as well as the [paper](https://eprint.iacr.org/2013/879.pdf) derived after that succintly describes the algorithm using an asymmetric pairing from Ben-Sasson, Chiesa, Tromer and Virza.
