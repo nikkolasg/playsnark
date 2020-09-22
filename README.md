@@ -21,6 +21,9 @@ You can follow the code by first looking at:
   doing and what the verifier must compute in order to make sure the prover
   didn't cheat.
 
+## Future
+
+I started this project merely as a self learning tool but I might continue to develop other proof systems in the future as time permits.
 
 ## Resources
 
