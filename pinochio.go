@@ -7,11 +7,16 @@ import (
 	"github.com/drand/kyber/util/random"
 )
 
+// This file implements the logic of the Pinocchio proof system mostly as
+// described in the original paper https://eprint.iacr.org/2013/279.pdf with
+// some modifications from https://eprint.iacr.org/2013/879.pdf that uses it in
+// the asymmetric pairing case, notably with BLS12-381.
+
 // TrustedSetup contains the information needed for a prover and a verifier.
 type TrustedSetup struct {
-	EK EvalKey
-	VK VerificationKey
-	t  ToxicWaste
+	EK EvalKey         // required by the prover
+	VK VerificationKey // required by the verifier
+	t  ToxicWaste      // to be deleted - left for testing
 }
 
 // ToxicWaste contains the information that should be deleted after a trusted
@@ -32,20 +37,25 @@ type ToxicWaste struct {
 type EvalKey struct {
 	// These commit evaluation are only for the non IO variables
 	// i.e. we take the polynomials that are evaluating only variables that are
-	// not inputs to the function or outputs
+	// not inputs to the circuit or outputs
 	// g_v ^ (v_k(s))
 	vs []G1
 	ws []G2
 	ys []G1
-	// shifted by alpha a_v
+	// shifted by alpha a_v: we use these to verify that the prover correctly
+	// uses the polynomials from the CRS
 	vas []G1
 	was []G1
 	yas []G1
 
 	// g^s^i for i=1...#ofgates (inclusive)
+	// We use these to allow the prover to evaluate the polynomials blindly
 	gsi []G1
 
-	// g_v^(b * v_k(s))
+	// g_v^(beta * v_k(s)) only for the non-IO variables
+	// We use these to allow the prover to prove he used the same value for the
+	// variable for all polynomials (i.e. in the exponent, he used v(s) and w(s)
+	// and y(s) and not v(s') with some weird s' for example)
 	vbs []G1
 	wbs []G2
 	ybs []G1
@@ -68,7 +78,8 @@ type VerificationKey struct {
 	bgamma G1
 	// same but in G2 (optimization from https://eprint.iacr.org/2013/879.pdf
 	bgamma2 G2
-	// g_y^(t(s)) where t is the minimal polynomial
+	// g_y^(t(s)) where t is the minimal polynomial (x-1)(x-2)... See QAP for
+	// more details
 	yts G2
 
 	// g^v_k(s) for all polynomials (not just the input / output as
@@ -110,7 +121,6 @@ func NewTrustedSetup(qap QAP) TrustedSetup {
 	// the part of the CRS with a polynomial to build up its proof
 	diff := qap.nbVars - qap.nbIO
 	ek.vs = generateEvalCommit(gv, qap.left[diff:], s, one)
-	fmt.Println(len(qap.out), " vs ", diff)
 	ek.ws = generateEvalCommit(gw, qap.right[diff:], s, one)
 	ek.ys = generateEvalCommit(gy, qap.out[diff:], s, one)
 	// compute the same evaluation but shifted by their respective alpha
@@ -192,7 +202,9 @@ type Proof struct {
 	gz G1
 }
 
-func GenProof(setup TrustedSetup, qap QAP, solution Vector) Proof {
+// GenProof takes the evaluation key, the QAP polynomials and the solution
+// vector and returns the corresponding proof.
+func GenProof(ek EvalKey, qap QAP, solution Vector) Proof {
 	// compute h(x) then evaluate it blindly at point s
 	left, right, out := qap.computeAggregatePoly(solution)
 	// p(x) = t(x) * h(x)
@@ -202,8 +214,8 @@ func GenProof(setup TrustedSetup, qap QAP, solution Vector) Proof {
 	if len(rem.Normalize()) > 0 {
 		panic("apocalypse")
 	}
-	// g^h(s) = SUM(s_i * G
-	ghs := hx.BlindEval(zeroG1, setup.EK.gsi)
+	// g^h(s) = SUM(s_i * G)
+	ghs := hx.BlindEval(zeroG1, ek.gsi)
 	diff := qap.nbVars - qap.nbIO
 	// compute g_v^(SUM v_k(s) * sol[k]) for k being NON IO
 	// same for y and w
@@ -216,17 +228,17 @@ func GenProof(setup TrustedSetup, qap QAP, solution Vector) Proof {
 		return acc
 	}
 	// g^(SUM sol[k] * v_k(s))
-	gvmids := computeSolCommit(zeroG1, setup.EK.vs)
-	gwmids := computeSolCommit(zeroG2, setup.EK.ws)
-	gymids := computeSolCommit(zeroG1, setup.EK.ys)
-	gvamids := computeSolCommit(zeroG1, setup.EK.vas)
-	gwamids := computeSolCommit(zeroG1, setup.EK.was)
-	gyamids := computeSolCommit(zeroG1, setup.EK.yas)
+	gvmids := computeSolCommit(zeroG1, ek.vs)
+	gwmids := computeSolCommit(zeroG2, ek.ws)
+	gymids := computeSolCommit(zeroG1, ek.ys)
+	gvamids := computeSolCommit(zeroG1, ek.vas)
+	gwamids := computeSolCommit(zeroG1, ek.was)
+	gyamids := computeSolCommit(zeroG1, ek.yas)
 
 	// g^(SUM sol[k] * v_k(s) * beta)
-	gvbmids := computeSolCommit(zeroG1, setup.EK.vbs)
-	gwbmids := computeSolCommit(zeroG1, setup.EK.wbs)
-	gybmids := computeSolCommit(zeroG1, setup.EK.ybs)
+	gvbmids := computeSolCommit(zeroG1, ek.vbs)
+	gwbmids := computeSolCommit(zeroG1, ek.wbs)
+	gybmids := computeSolCommit(zeroG1, ek.ybs)
 	gz := NewG1().Add(gvbmids, NewG1().Add(gwbmids, gybmids))
 
 	return Proof{
@@ -285,8 +297,8 @@ func VerifyProof(vk VerificationKey, qap QAP, p Proof, io Vector) bool {
 		// first term is reconstructed above from the verification key and the
 		// input/output, second term is given by the prover (the intermediate
 		// values of the circuit)
-		// gv = (SUM_io v_k(s) * c_k) * Gv + (SUM_nio v_k(s) * c_k) * Gv
-		// gv = (SUM_all v_k(s) * c_k) * Gv
+		// gv = g^(r_v * SUM_io v_k(s) * c_k) + g^(r_v * SUM_nio v_k(s) * c_k)
+		// gv = g^(r_v * SUM_all v_k(s) * c_k)
 		// where io represents the indices of the inputs / outputs variables
 		// and nio the rest
 		gv := NewG1().Add(gvkio, p.vss)
@@ -342,20 +354,20 @@ func VerifyProof(vk VerificationKey, qap QAP, p Proof, io Vector) bool {
 		// into the variable for the three polys v w and y. Wo do this via a linear
 		// sum check with randomnized coefficient for each polynomial to avoid
 		// malleability.
-		// left is e(g^(a_v*v(s) + a_w*w(s) + a_y *y(s)) * beta,g^gamma)
+		// left is e(g^(r_v*v(s) + r_w*w(s) + r_y *y(s)) * beta,g^gamma)
 		left := Pair(p.gz, vk.gamma)
 		// right is splitted into two GT elements as an optimization of
 		// https://eprint.iacr.org/2013/879.pdf because of polynomial w which is in
 		// g2
-		// t1 := e(g^(a_v*v(s)) * g^(a_y*y(s)), g^beta*gamma)
-		// t2 := e(g^beta*gamma, g^(a_w*w(s))
+		// t1 := e(g^(r_v*v(s)) * g^(r_y*y(s)), g^beta*gamma)
+		// t2 := e(g^beta*gamma, g^(r_w*w(s))
 		// right = t1*t2 = left !
 		lt1 := NewG1().Add(p.vss, p.yss)
 		t1 := Pair(lt1, vk.bgamma2)
 		t2 := Pair(vk.bgamma, p.wss)
 		right := zeroGT.Clone().Add(t1, t2)
 		if !right.Equal(left) {
-			fmt.Println("damn")
+			fmt.Println("damdam")
 			return false
 		}
 	}

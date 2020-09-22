@@ -26,7 +26,7 @@ func TestPinocchioProofValidDivision(t *testing.T) {
 	qap := ToQAP(r1cs)
 	diff := qap.nbVars - qap.nbIO
 	setup := NewTrustedSetup(qap)
-	proof := GenProof(setup, qap, s)
+	proof := GenProof(setup.EK, qap, s)
 
 	// test GHS
 	// compute h(x) then evaluate it blindly at point s
@@ -201,7 +201,7 @@ func TestPinocchioInvalidProof(t *testing.T) {
 	qap := ToQAP(r1cs)
 	diff := qap.nbVars - qap.nbIO
 	setup := NewTrustedSetup(qap)
-	proof := GenProof(setup, qap, s)
+	proof := GenProof(setup.EK, qap, s)
 	fmt.Println(proof.String())
 
 	// left is e(g^(a_v*v(s) + a_w*w(s) + a_y *y(s)) * beta,g^gamma)
@@ -260,4 +260,18 @@ func TestPinocchioInvalidProof(t *testing.T) {
 	p2.gz = NewG1().Pick(random.New())
 	require.False(t, VerifyProof(setup.VK, qap, p2, s[:diff]))
 
+	p2 = proof
+	vk2 := setup.VK
+	vk2.bgamma2 = NewG2().Pick(random.New())
+	require.False(t, VerifyProof(vk2, qap, p2, s[:diff]))
+
+	p2 = proof
+	vk2 = setup.VK
+	vk2.av = NewG2().Pick(random.New())
+	require.False(t, VerifyProof(vk2, qap, p2, s[:diff]))
+
+	p2 = proof
+	vk2 = setup.VK
+	vk2.ay = NewG2().Pick(random.New())
+	require.False(t, VerifyProof(vk2, qap, p2, s[:diff]))
 }
