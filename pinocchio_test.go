@@ -274,4 +274,5 @@ func TestPinocchioInvalidProof(t *testing.T) {
 	vk2 = setup.VK
 	vk2.ay = NewG2().Pick(random.New())
 	require.False(t, VerifyProof(vk2, qap, p2, s[:diff]))
+
 }
