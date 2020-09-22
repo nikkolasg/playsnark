@@ -3,6 +3,7 @@ package playsnark
 // let's construct the r1cs matrix A_l, A_r A_o for the equation
 // x^3 + x + 5 = 35
 
+// Var holds the name of the variable and its index in the vector of variables
 type Var struct {
 	Index int
 	Name  string
@@ -32,15 +33,19 @@ func createVariables() (Variables, int) {
 	return ordering, 3
 }
 
+// IndexOf returns the index of a variable
 func (v *Variables) IndexOf(name string) int {
 	for _, va := range *v {
 		if va.Name == name {
 			return va.Index
 		}
 	}
-	panic("aie")
+	panic("plouf")
 }
 
+// ConstraintOn returns a vector where the i-th entry is set to 1 if there is a
+// variable given whose name has the i-th index.
+// For example, `ConstraintOn("x","out")` will return [0,1,1,0,0,0]
 func (v *Variables) ConstraintOn(names ...string) Vector {
 	var constraints Vector
 	for _, variable := range *v {
@@ -69,7 +74,6 @@ func (v *Variables) ConstraintOn(names ...string) Vector {
 // v = u * x
 // w = v + x
 // out = w + 5
-
 // variable "const" has 1, always
 // variable x is 3 because 3 is a solution to the equation  x^3 + x + 5 = 35
 // variable "out" is 35 because that's the right side of the equation

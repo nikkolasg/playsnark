@@ -22,7 +22,7 @@ type QAP struct {
 	left  []Poly
 	right []Poly
 	out   []Poly
-	// z is the minimal polynomial
+	// z is the minimal polynomial (x-1)(x-2)(x-3)...
 	z Poly
 }
 
