@@ -14,6 +14,7 @@ satisfying "equation" that the prover is trying to prove.
 Currently, this code implements the [Pinocchio proof
 system](https://eprint.iacr.org/2013/879.pdf), over a toy example.  Namely, it
 allows a prover to prove he knows an x such that `f(x) = x^3 + x + 5 = 35`.
+
 You can follow the code by first looking at:
 * `r1cs.go`: how does the function gets translated into R1CS format including the
   different variables and gates
@@ -22,6 +23,10 @@ You can follow the code by first looking at:
 * `pinocchio.go`: what is the trusted setup in Pinocchio, what the prover is
   doing and what the verifier must compute in order to make sure the prover
   didn't cheat.
+
+There are two additional files as well:
+* `curve.go` contains the code defining the curve we use, the points and the generators
+* `algebra.go` contains some logic related to matrices, vectors, polynomials needed in the r1cs and QAP modules.
 
 ## Future
 
