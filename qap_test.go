@@ -10,7 +10,7 @@ import (
 func TestQAPManual(t *testing.T) {
 	r1cs := createR1CS()
 	qap := ToQAP(r1cs)
-	s := createWitness()
+	s := createWitness(r1cs)
 	require.Len(t, r1cs.left, 4)
 	require.Len(t, r1cs.left.Transpose(), len(s))
 	require.Len(t, qap.left, len(s))
@@ -62,8 +62,8 @@ func TestQAPManual(t *testing.T) {
 }
 
 func TestQAPValidity(t *testing.T) {
-	s := createWitness()
 	r1cs := createR1CS()
+	s := createWitness(r1cs)
 	qap := ToQAP(r1cs)
 	require.True(t, qap.IsValid(s))
 	fmt.Println(qap.nbGates)
@@ -71,8 +71,8 @@ func TestQAPValidity(t *testing.T) {
 }
 
 func TestQAPInterpolate(t *testing.T) {
-	_ = createWitness()
 	r1cs := createR1CS()
+	_ = createWitness(r1cs)
 	fmt.Println(r1cs.out)
 	polys := qapInterpolate(r1cs.out)
 	fmt.Println(polys)

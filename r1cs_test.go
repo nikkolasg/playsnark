@@ -15,7 +15,7 @@ func TestR1CSEquation(t *testing.T) {
 	// Left * s^T  x Right * s^T - Out * s^T = 0
 	// where x is the hadamard product
 
-	s := createWitness()
+	s := createWitness(r1cs)
 	l := r1cs.left.Mul(s)
 	r := r1cs.right.Mul(s)
 	o := r1cs.out.Mul(s)
