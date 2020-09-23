@@ -15,23 +15,7 @@ func newVar(i int, name string) Var {
 	}
 }
 
-// createVariables returns all the variables for the R1CS
-// circuit we want to prove with their associated index
-// u = x * x
-// v = u * x
-// w = v + x
-// out = w + 5
 type Variables []Var
-
-// createVariables returns the indexes of the variables and the number of input
-// output variables
-func createVariables() (Variables, int) {
-	var ordering []Var
-	for i, name := range []string{"const", "x", "out", "u", "v", "w"} {
-		ordering = append(ordering, newVar(i, name))
-	}
-	return ordering, 3
-}
 
 // IndexOf returns the index of a variable
 func (v *Variables) IndexOf(name string) int {
