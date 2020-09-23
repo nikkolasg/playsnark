@@ -124,6 +124,11 @@ func (r *R1CS) NewVar(name string) {
 	r.mergeVars()
 }
 
+// mergeVars ensure that the variables are in order as in the following:
+// - first the "const" variable
+// - then the inputs variables
+// - then the outputs variables
+// - then the intermediate variables
 func (r *R1CS) mergeVars() {
 	var vars = []Var{newVar(0, "const")}
 	for _, n := range r.inputs {
