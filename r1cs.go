@@ -141,7 +141,7 @@ func (r *R1CS) NewVar(name string) {
 }
 
 func (r *R1CS) mergeVars() {
-	var vars = []Var{newVar(1, "const")}
+	var vars = []Var{newVar(0, "const")}
 	for _, n := range r.inputs {
 		vars = append(vars, newVar(len(vars), n))
 	}
