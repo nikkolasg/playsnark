@@ -21,8 +21,8 @@ func TestPinocchioCombine(t *testing.T) {
 }
 
 func TestPinocchioProofValidDivision(t *testing.T) {
-	s := createWitness()
 	r1cs := createR1CS()
+	s := createWitness(r1cs)
 	qap := ToQAP(r1cs)
 	diff := qap.nbVars - qap.nbIO
 	setup := NewTrustedSetup(qap)
@@ -196,8 +196,8 @@ func TestPinocchioProofValidDivision(t *testing.T) {
 }
 
 func TestPinocchioInvalidProof(t *testing.T) {
-	s := createWitness()
 	r1cs := createR1CS()
+	s := createWitness(r1cs)
 	qap := ToQAP(r1cs)
 	diff := qap.nbVars - qap.nbIO
 	setup := NewTrustedSetup(qap)

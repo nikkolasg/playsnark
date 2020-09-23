@@ -15,23 +15,7 @@ func newVar(i int, name string) Var {
 	}
 }
 
-// createVariables returns all the variables for the R1CS
-// circuit we want to prove with their associated index
-// u = x * x
-// v = u * x
-// w = v + x
-// out = w + 5
 type Variables []Var
-
-// createVariables returns the indexes of the variables and the number of input
-// output variables
-func createVariables() (Variables, int) {
-	var ordering []Var
-	for i, name := range []string{"const", "x", "out", "u", "v", "w"} {
-		ordering = append(ordering, newVar(i, name))
-	}
-	return ordering, 3
-}
 
 // IndexOf returns the index of a variable
 func (v *Variables) IndexOf(name string) int {
@@ -80,16 +64,14 @@ func (v *Variables) ConstraintOn(names ...string) Vector {
 // variable "u" is 9 because it's 3x3
 // variable "v" is 27 because it's ux3
 // variable "w" is 30 because it v + x = 27 + 3
-func createWitness() Vector {
-	vars, _ := createVariables()
-	nbVars := len(vars)
-	solution := make(Vector, nbVars)
-	solution[vars.IndexOf("const")] = 1
-	solution[vars.IndexOf("x")] = 3
-	solution[vars.IndexOf("out")] = 35
-	solution[vars.IndexOf("u")] = 9
-	solution[vars.IndexOf("v")] = 27
-	solution[vars.IndexOf("w")] = 30
+func createWitness(r R1CS) Vector {
+	var solution = make(Vector, len(r.vars))
+	solution[r.vars.IndexOf("const")] = 1
+	solution[r.vars.IndexOf("x")] = 3
+	solution[r.vars.IndexOf("out")] = 35
+	solution[r.vars.IndexOf("u")] = 9
+	solution[r.vars.IndexOf("v")] = 27
+	solution[r.vars.IndexOf("w")] = 30
 	return solution
 }
 
@@ -97,56 +79,115 @@ func createWitness() Vector {
 // such that when given a valid vector of solution "s", the equation
 // <left,s> * <right,s> - <out,s> = 0 is satisfied.
 type R1CS struct {
-	vars  Variables
-	nbIO  int
+	// slice of name of the input variables
+	inputs []string
+	// slice of name of the outputs variables
+	outputs []string
+	// slice of name of the intermediate variable in the circuit - it is
+	// necessary to separate those as the verifier knows already the input and
+	// outputs values, but doesn't know the intermediate ones, because the
+	// prover is doing the computation, not the verifier. The prover then shows
+	// correctness of the computations using these variables.
+	intermediates []string
+	// the concatatenated variables [const, inputs..., ouputs..., intermediates]
+	// in order
+	vars Variables
+	// the matrices representing the wire of each variable for each gate:
+	// the rows of the matrices represent the gate and the columns the variable
+	// so if left(row=2,column=3) = 1, then it means the 3rd variable in `vars`
+	// is wired up as the left input to the 2nd gate constraint.
 	left  Matrix
 	right Matrix
 	out   Matrix
 }
 
-// createR1CS returns the R1CS for the problem we consider
-// x^3 + x + 5 = 35 using the variables described as in "createVariables"
-func createR1CS() R1CS {
-	variables, _ := createVariables()
-	// We create a list of vector, i.e. a matrix
-	// for all the left, right and out output
-	var left, right, out Matrix
+func NewR1CS() R1CS {
+	return R1CS{}
+}
 
-	// u = x * x
-	left = append(left, variables.ConstraintOn("x"))
-	right = append(right, variables.ConstraintOn("x"))
-	out = append(out, variables.ConstraintOn("u"))
+func (r *R1CS) nbIO() int {
+	return 1 + len(r.inputs) + len(r.outputs)
+}
 
-	// v = u * x
-	left = append(left, variables.ConstraintOn("u"))
-	right = append(right, variables.ConstraintOn("x"))
-	out = append(out, variables.ConstraintOn("v"))
+func (r *R1CS) NewInput(name string) {
+	r.inputs = append(r.inputs, name)
+	r.mergeVars()
+}
 
-	// w = v + x
+func (r *R1CS) NewOutput(name string) {
+	r.outputs = append(r.outputs, name)
+	r.mergeVars()
+}
+
+func (r *R1CS) NewVar(name string) {
+	r.intermediates = append(r.intermediates, name)
+	r.mergeVars()
+}
+
+func (r *R1CS) mergeVars() {
+	var vars = []Var{newVar(0, "const")}
+	for _, n := range r.inputs {
+		vars = append(vars, newVar(len(vars), n))
+	}
+	for _, n := range r.outputs {
+		vars = append(vars, newVar(len(vars), n))
+	}
+	for _, n := range r.intermediates {
+		vars = append(vars, newVar(len(vars), n))
+	}
+	r.vars = vars
+}
+
+// Mul takes the name of the left variable, right variable and the output
+// variable and wires them such that left * right = out
+func (r *R1CS) Mul(left, right, out string) {
+	r.left = append(r.left, r.vars.ConstraintOn(left))
+	r.right = append(r.right, r.vars.ConstraintOn(right))
+	r.out = append(r.out, r.vars.ConstraintOn(out))
+}
+
+// Add takes the name of the first variable, second variable and the output
+// variable and wires them such that var1 + var2 = out
+func (r *R1CS) Add(var1, var2, out string) {
 	// here since it is an addition, we simply mark the two in the left
 	// variable for example that will get added togeter during the dot product
 	// and only mark as one the constant in the right input so it gives
 	// w = (v + x) * 1
-	left = append(left, variables.ConstraintOn("v", "x"))
-	right = append(right, variables.ConstraintOn("const"))
-	out = append(out, variables.ConstraintOn("w"))
+	r.left = append(r.left, r.vars.ConstraintOn(var1, var2))
+	r.right = append(r.right, r.vars.ConstraintOn("const"))
+	r.out = append(r.out, r.vars.ConstraintOn(out))
+}
 
+// AddConst takes the name of the first variable, the value of the constant to
+// add and the output variable name and wires them such that var1 + const = out
+func (r *R1CS) AddConst(var1 string, add int, out string) {
+	row := r.vars.ConstraintOn("const", var1)
+	row[0] = row[0] * Value(add)
+	r.left = append(r.left, row)
+	r.right = append(r.right, r.vars.ConstraintOn("const"))
+	r.out = append(r.out, r.vars.ConstraintOn(out))
+}
+
+// createR1CS returns the R1CS for the problem we consider
+// x^3 + x + 5 = 35 using the variables described as in "createVariables"
+func createR1CS() R1CS {
+	c := NewR1CS()
+	c.NewInput("x")
+	c.NewOutput("out")
+	// u = x * x
+	c.NewVar("u")
+	// v = u * x
+	c.NewVar("v")
+	// w = v + x
+	c.NewVar("w")
+
+	// u = x * x
+	c.Mul("x", "x", "u")
+	// v = u * x
+	c.Mul("u", "x", "v")
+	// w = v + x
+	c.Add("v", "x", "w")
 	// out = w + 5
-	// Here it's same as before, so we consider
-	// out = (w + 5) * 1
-	l := variables.ConstraintOn("const", "w")
-	// here I'm cheating because I know the first value is the constant one
-	// TODO make API to change constant value in vector
-	l[0] = l[0] * 5
-	left = append(left, l)
-	right = append(right, variables.ConstraintOn("const"))
-	out = append(out, variables.ConstraintOn("out"))
-	return R1CS{
-		vars:  variables,
-		left:  left,
-		right: right,
-		out:   out,
-		// "const", "x", and "out"
-		nbIO: 3,
-	}
+	c.AddConst("w", 5, "out")
+	return c
 }
