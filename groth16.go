@@ -194,6 +194,27 @@ func Groth16Prove(tr G16Setup, q QAP, sol Vector) G16Proof {
 	}
 }
 
+func Groth16Verify(tr G16Setup, q QAP, p G16Proof, io Vector) bool {
+	// Proof verification consists in 4 pairings (without optimizations) and one
+	// equation check:
+	// left side :  e(A * B)
+	left := Pair(p.A, p.B)
+	// right side: a * b * c
+	//  	a. e(alpha, beta)
+	//		b. e(SUM IoLP, gamma)
+	//		c. e(C1,  delta)
+
+	a := Pair(tr.Alpha, tr.Beta2)
+	b1 := NewG1().Null()
+	for i, iolp := range tr.IoLP {
+		b1 = b1.Add(b1, NewG1().Mul(io[i].ToFieldElement(), iolp))
+	}
+	b := Pair(b1, tr.Gamma)
+	c := Pair(p.C, tr.Delta2)
+	right := a.Add(a, b.Add(b, c))
+	return left.Equal(right)
+}
+
 // in g1, (beta*u_i(x) + alpha*v_i(x) + w_i(x)) for the i-th poly variable.
 // I call this relation "linearPoly". fullLinearPoly iterates over multiples
 // variables and returns the list and its commitment

@@ -19,6 +19,16 @@ func TestGroth16TrustedSetup(t *testing.T) {
 	require.Equal(t, h.Degree(), qap.nbGates-2)
 }
 
+func TestGroth16Verify(t *testing.T) {
+	r1cs := createR1CS()
+	s := createWitness(r1cs)
+	qap := ToQAP(r1cs)
+	diff := qap.nbVars - qap.nbIO
+	tr := NewGroth16TrustedSetup(qap)
+	proof := Groth16Prove(tr, qap, s)
+	require.True(t, Groth16Verify(tr, qap, proof, s[:diff]))
+}
+
 func TestGroth16ProofGen(t *testing.T) {
 	r1cs := createR1CS()
 	s := createWitness(r1cs)
