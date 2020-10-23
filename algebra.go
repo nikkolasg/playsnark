@@ -351,3 +351,19 @@ func (p Poly) Commit(base Commit) PolyCommit {
 	}
 	return pp
 }
+
+// GeneratePowersCommit returns { g^shift * s^i} for i=0...power included
+func GeneratePowersCommit(base Commit, e Element, shift Element, power int) []Commit {
+	var gi = make([]Commit, 0, power+1)
+	gi = append(gi, base.Clone().Mul(shift, nil))
+	var si = one.Clone()
+	var tmp = NewElement()
+	for i := 0; i < power; i++ {
+		// s * (tmp) = s * ( s * ( .. ) )
+		si = si.Mul(si, e)
+		// s^i * shift
+		tmp = tmp.Mul(si, shift)
+		gi = append(gi, base.Clone().Mul(tmp, nil))
+	}
+	return gi
+}

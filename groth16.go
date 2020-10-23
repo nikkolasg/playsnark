@@ -6,8 +6,12 @@ import (
 
 // Implements Groth16 paper https://eprint.iacr.org/2016/260.pdf
 // In the paper, m represents the number of variables and n the number of
-// constraints / equation
+// constraints / equation. Note this implementation does not perform all
+// optimization listed in the paper such as separating the verification from
+// evaluation key and the pre-pairing result from the trusted setup.
 
+// groth16ToxicWaste contains the results that must be delete after a trusted
+// setup. It is kept here for testing and learning purpose.
 type groth16ToxicWaste struct {
 	// Elements that are going to be committed on G1 for the "public" part of the
 	// trusted setup
@@ -21,12 +25,18 @@ type groth16ToxicWaste struct {
 	Gamma Element
 }
 
-type G16Setup = Groth16TrustedSetup
-
-type Groth16TrustedSetup struct {
-	tw    groth16ToxicWaste
+// Groth16Setup contains all the information created during a trusted setup
+// required by the prover and the verifier.
+type Groth16Setup struct {
+	tw groth16ToxicWaste
+	// Alpha and beta are required to make sure the computation of the proof
+	// elements A B and C are consistent with each other w.r.t. the intermediate
+	// variables used, i.e. they used the same a_i inside their computation.
+	// three computations
 	Alpha G1
 	Beta  G1
+	// Delta and gamma (in G2 later) forces independence of computations for A
+	// and B such that results can only be balanced by C and nothing else.
 	Delta G1
 	// {x^i} for i:0->nbGates-1
 	Xi []G1
@@ -50,9 +60,10 @@ type Groth16TrustedSetup struct {
 	Xi2 []G1
 }
 
-func NewGroth16TrustedSetup(qap QAP) Groth16TrustedSetup {
+// NewGroth16TrustedSetup returns a setup for the given circuit
+func NewGroth16TrustedSetup(qap QAP) Groth16Setup {
 	var tw groth16ToxicWaste
-	var tr Groth16TrustedSetup
+	var tr Groth16Setup
 	tw.Alpha = NewElement().Pick(random.New())
 	tr.Alpha = NewG1().Mul(tw.Alpha, nil)
 
@@ -65,8 +76,8 @@ func NewGroth16TrustedSetup(qap QAP) Groth16TrustedSetup {
 	tr.Delta2 = NewG2().Mul(tw.Delta, nil)
 
 	tw.X = NewElement().Pick(random.New())
-	tr.Xi = generatePowersCommit(zeroG1, tw.X, one.Clone(), qap.nbGates-1)
-	tr.Xi2 = generatePowersCommit(zeroG2, tw.X, one.Clone(), qap.nbGates-1)
+	tr.Xi = GeneratePowersCommit(zeroG1, tw.X, one.Clone(), qap.nbGates-1)
+	tr.Xi2 = GeneratePowersCommit(zeroG2, tw.X, one.Clone(), qap.nbGates-1)
 
 	tw.Gamma = NewElement().Pick(random.New())
 	tr.Gamma = NewG2().Mul(tw.Gamma, nil)
@@ -83,14 +94,15 @@ func NewGroth16TrustedSetup(qap QAP) Groth16TrustedSetup {
 	tx := qap.z.Eval(tw.X)
 	txd := NewElement().Div(tx, tw.Delta)
 	power := qap.nbGates - 2
-	tr.XiT = generatePowersCommit(zeroG1, tw.X, txd, power)
+	tr.XiT = GeneratePowersCommit(zeroG1, tw.X, txd, power)
 
 	tr.tw = tw
 	return tr
 }
 
-type G16Proof = Groth16Proof
-
+// Groth16Proof contains the three elements required by the verifier as well as
+// the private values used by the prover (which must not be given to verifier as
+// this would break zero knowledge)
 type Groth16Proof struct {
 	tp groth16ToxicProof
 	A  G1
@@ -98,12 +110,16 @@ type Groth16Proof struct {
 	C  G1
 }
 
+// This struct contains the two private fields randomly sampled by the prover
+// during computation of the proof, required to provide zero knowledge.
 type groth16ToxicProof struct {
 	R Element
 	S Element
 }
 
-func Groth16Prove(tr G16Setup, q QAP, sol Vector) G16Proof {
+// Groth16Prove proofs it knows a solution sol for the given circuit and returns
+// the proof
+func Groth16Prove(tr Groth16Setup, q QAP, sol Vector) Groth16Proof {
 	// The proof code is structured in three pieces, for generating the three
 	// elements of the proofs A B and C.
 	//
@@ -194,7 +210,8 @@ func Groth16Prove(tr G16Setup, q QAP, sol Vector) G16Proof {
 	}
 }
 
-func Groth16Verify(tr G16Setup, q QAP, p G16Proof, io Vector) bool {
+// Groth16Verify returns true if the proof is valid
+func Groth16Verify(tr Groth16Setup, q QAP, p Groth16Proof, io Vector) bool {
 	// Proof verification consists in 4 pairings (without optimizations) and one
 	// equation check:
 	// left side :  e(A * B)

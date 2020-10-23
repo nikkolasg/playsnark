@@ -7,21 +7,21 @@ import (
 	"github.com/drand/kyber/util/random"
 )
 
-// This file implements the logic of the Pinocchio proof system mostly as
+// This file implements the logic of the Pinocchio PHGR13 proof system mostly as
 // described in the original paper https://eprint.iacr.org/2013/279.pdf with
 // some modifications from https://eprint.iacr.org/2013/879.pdf that uses it in
 // the asymmetric pairing case, notably with BLS12-381.
 
-// TrustedSetup contains the information needed for a prover and a verifier.
-type TrustedSetup struct {
-	EK EvalKey         // required by the prover
-	VK VerificationKey // required by the verifier
-	t  ToxicWaste      // to be deleted - left for testing
+// PHGR13Setup contains the information needed for a prover and a verifier.
+type PHGR13Setup struct {
+	EK PHGR13EvalKey    // required by the prover
+	VK PHGR13VerifKey   // required by the verifier
+	t  pHGR13ToxicWaste // to be deleted - left for testing
 }
 
-// ToxicWaste contains the information that should be deleted after a trusted
+// pHGR13ToxicWaste contains the information that should be deleted after a trusted
 // setup but that we keep it here for testing reason.
-type ToxicWaste struct {
+type pHGR13ToxicWaste struct {
 	s    Element
 	beta Element
 	rv   Element
@@ -32,9 +32,9 @@ type ToxicWaste struct {
 	gy   G1
 }
 
-// EvalKey contains the information of the trusted setup needed for the prove to
+// PHGR13EvalKey contains the information of the trusted setup needed for the prove to
 // create a valid proof
-type EvalKey struct {
+type PHGR13EvalKey struct {
 	// These commit evaluation are only for the non IO variables
 	// i.e. we take the polynomials that are evaluating only variables that are
 	// not inputs to the circuit or outputs
@@ -61,9 +61,9 @@ type EvalKey struct {
 	ybs []G1
 }
 
-// VerificationKey contains the information from the trusted setup for the
+// PHGR13VerifKey contains the information from the trusted setup for the
 // verifier to verify a valid proof
-type VerificationKey struct {
+type PHGR13VerifKey struct {
 	// g
 	g1 G1
 	// g^a_v
@@ -90,15 +90,15 @@ type VerificationKey struct {
 }
 
 // https://eprint.iacr.org/2013/279.pdf
-func NewTrustedSetup(qap QAP) TrustedSetup {
-	var ek EvalKey
-	var vk VerificationKey
+func NewPHGR13TrustedSetup(qap QAP) PHGR13Setup {
+	var ek PHGR13EvalKey
+	var vk PHGR13VerifKey
 	// s is the private point at which the prover evaluates its QAP polynomials
 	// s must thrown away after the trusted setup such that the prover doesn't
 	// it, it only evaluates its polynomials blindly to this point
 	s := NewElement().Pick(random.New())
 	// gsi contains g^(s^i) from i=0 to g^(si^#of gates) included
-	ek.gsi = generatePowersCommit(zeroG1, s, one.Clone(), qap.z.Degree()-2)
+	ek.gsi = GeneratePowersCommit(zeroG1, s, one.Clone(), qap.z.Degree()-2)
 	// alpha for the left right and outputs are for generating the linear
 	// combination in the exponent
 	av := NewElement().Pick(random.New())
@@ -159,10 +159,10 @@ func NewTrustedSetup(qap QAP) TrustedSetup {
 	vk.vs = generateEvalCommit(gv, qap.left, s, one)
 	vk.ws = generateEvalCommit(gw, qap.right, s, one)
 	vk.ys = generateEvalCommit(gy, qap.out, s, one)
-	return TrustedSetup{
+	return PHGR13Setup{
 		EK: ek,
 		VK: vk,
-		t: ToxicWaste{
+		t: pHGR13ToxicWaste{
 			beta: beta,
 			s:    s,
 			gv:   gv,
@@ -175,9 +175,9 @@ func NewTrustedSetup(qap QAP) TrustedSetup {
 	}
 }
 
-// Proof contains all the information computed by a prover with the
+// PHGR13Proof contains all the information computed by a prover with the
 // EvaluationKey and a circuit and its witness
-type Proof struct {
+type PHGR13Proof struct {
 	// g^(SUM v_k(s)) for non-IO k
 	vss G1
 	// same this as vss but shifted by alpha_v: g^[alpha_v* (SUM * v_k(s))]
@@ -202,9 +202,9 @@ type Proof struct {
 	gz G1
 }
 
-// GenProof takes the evaluation key, the QAP polynomials and the solution
+// PHGR13Prove takes the evaluation key, the QAP polynomials and the solution
 // vector and returns the corresponding proof.
-func GenProof(ek EvalKey, qap QAP, solution Vector) Proof {
+func PHGR13Prove(ek PHGR13EvalKey, qap QAP, solution Vector) PHGR13Proof {
 	// compute h(x) then evaluate it blindly at point s
 	left, right, out := qap.computeAggregatePoly(solution)
 	// p(x) = t(x) * h(x)
@@ -241,7 +241,7 @@ func GenProof(ek EvalKey, qap QAP, solution Vector) Proof {
 	gybmids := computeSolCommit(zeroG1, ek.ybs)
 	gz := NewG1().Add(gvbmids, NewG1().Add(gwbmids, gybmids))
 
-	return Proof{
+	return PHGR13Proof{
 		hs:   ghs,
 		vss:  gvmids,
 		wss:  gwmids,
@@ -253,7 +253,7 @@ func GenProof(ek EvalKey, qap QAP, solution Vector) Proof {
 	}
 }
 
-func (p *Proof) String() string {
+func (p *PHGR13Proof) String() string {
 	var b bytes.Buffer
 	buff, _ := p.hs.MarshalBinary()
 	b.WriteString(fmt.Sprintf("hs: %x\n", buff))
@@ -274,11 +274,11 @@ func (p *Proof) String() string {
 	return b.String()
 }
 
-// VerifyProof runs the different consistency checks. It needs the trusted
+// PHGR13Verify runs the different consistency checks. It needs the trusted
 // setup variables (actually only the verification key), the QAP describing
 // the circuit, the proof generated by the prover and the inputs and outputs
 // expected
-func VerifyProof(vk VerificationKey, qap QAP, p Proof, io Vector) bool {
+func PHGR13Verify(vk PHGR13VerifKey, qap QAP, p PHGR13Proof, io Vector) bool {
 	// DIVISION CHECK: we look if the prover correctly evaluated the polynomials
 	// such that the QAP equation resolves:
 	// r_v * r_w * v(s) * w(s) == r_y * (p(s) +  y(s))
@@ -372,22 +372,6 @@ func VerifyProof(vk VerificationKey, qap QAP, p Proof, io Vector) bool {
 		}
 	}
 	return true
-}
-
-// generatePowersCommit returns { g^shift * s^i} for i=0...power included
-func generatePowersCommit(base Commit, e Element, shift Element, power int) []Commit {
-	var gi = make([]Commit, 0, power+1)
-	gi = append(gi, base.Clone().Mul(shift, nil))
-	var si = one.Clone()
-	var tmp = NewElement()
-	for i := 0; i < power; i++ {
-		// s * (tmp) = s * ( s * ( .. ) )
-		si = si.Mul(si, e)
-		// s^i * shift
-		tmp = tmp.Mul(si, shift)
-		gi = append(gi, base.Clone().Mul(tmp, nil))
-	}
-	return gi
 }
 
 // Evaluate all the polynomials at the given x and return the list of their
