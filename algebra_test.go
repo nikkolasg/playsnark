@@ -23,11 +23,15 @@ func TestAlgebraBlindEval(t *testing.T) {
 	var p = randomPoly(4)
 	var x = NewElement().Pick(random.New())
 	var px = p.Eval(x)
+	var shift = NewElement().Pick(random.New())
+	// g^p(x)
 	var gpx = NewG1().Mul(px, nil)
+	// g^(p(x) * shift)
+	var shiftGpx = NewG1().Mul(shift, gpx)
 
-	var blindedPoints = generatePowersCommit(zeroG1, x, one, d)
+	var blindedPoints = GeneratePowersCommit(zeroG1, x, shift, d)
 	var res = p.BlindEval(zeroG1, blindedPoints)
-	require.True(t, gpx.Equal(res))
+	require.True(t, shiftGpx.Equal(res))
 }
 
 func TestAlgebraInterpolate(t *testing.T) {

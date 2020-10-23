@@ -1,15 +1,29 @@
 [![Build Status](https://travis-ci.com/nikkolasg/playsnark.svg?branch=master)](https://travis-ci.com/nikkolasg/playsnark)
 [![codecov](https://codecov.io/gh/nikkolasg/playsnark/branch/master/graph/badge.svg?token=F29VQZ22KO)](undefined)
 
-**WARNING: This is a toy implementation, incomplete, with potentially many pitfalls and bugs, do ABSOLUTELY NOT use it in any production setting, you've been warned!**
+**WARNING: This is a toy implementation with many pitfalls and bugs and is NOT
+intented to be securely deployed, do ABSOLUTELY NOT use it in any production
+setting, you've been warned!** For example, this implementation keeps around 
+very sensitive information during trusted setup or proof generation. The goal is
+to learn how the different proofs system work.
 
 # Playsnark: a playground to learn proofs systems
 
 The goal of this code is to learn different proofs systems from the
-ground up. The code is a _very minimal_ implementation of the [Pinocchio proof
-system](https://eprint.iacr.org/2013/879.pdf), over a toy function. 
-The code is tested at each of these levels and to highlight what is the
-satisfying "equation" that the prover is trying to prove.
+ground up. It is written in a very explanatory way with lots of comments
+explaining equations. It is NOT meant to be performant (at least yet!). 
+It contains full arithmetization step with R1CS and QAP and the output can be
+plugged into multiple proof systems. The code is tested at each of these levels
+and to highlight what is the satisfying "equation" that the prover is trying to
+prove.
+
+Currently two proofs systems exists:
+* The original [Pinocchio proof system](https://eprint.iacr.org/2013/879.pdf)
+  (called PHGR13 in the code and litterature)
+  kinda of the first practical proof systems that made it out there.
+* [Groth16](https://eprint.iacr.org/2016/260.pdf) paper which is what is
+  deployed in most zkSNARK application nowadays.
+
 
 ## R1CS
 
@@ -79,20 +93,21 @@ s := createWitness(r1cs)
 require.True(t, qap.IsValid(s))
 ```
 
-## SNARK part
+## Proofs systems
 
-### Trusted Setup
+### Pinochio
 
-Currently, playsnark implements the Pinocchio proof system which requires a
-trusted setup for the prover and verifier. It enables the prover to blindly
-evaluates the polynomials of the QAP above, where blindly means it evaluates
-them at a unknown point s.
+#### Trusted Setup
+
+Thr Pinocchio proof system which requires a trusted setup for the prover and
+verifier. It enables the prover to blindly evaluates the polynomials of the QAP
+above, where blindly means it evaluates them at a unknown point s.
 
 You can simply generate a trusted setup for the current circuit like so:
 ```go
 r1cs := createR1CS()
 qap := ToQAP(r1cs)
-setup := NewTrustedSetup(qap)
+setup := NewPHGR13TrustedSetup(qap)
 ```
 
 The trusted setup has two parts, the **evaluation key** required by the prover
@@ -111,7 +126,7 @@ type TrustedSetup struct {
 }
 ```
 
-### Generating Proof
+#### Generating Proof
 
 The prover then needs the evaluation key, the QAP polynomials and the solution
 vector:
@@ -119,16 +134,16 @@ vector:
 r1cs := createR1CS()
 s := createWitness(r1cs)
 qap := ToQAP(r1cs)
-setup := NewTrustedSetup(qap)
-proof := GenProof(setup.EK, qap, s)
+setup := NewPHGR13TrustedSetup(qap)
+proof := PHGR13Prove(setup.EK, qap, s)
 
 ```
 
-### Verifiying proof
+#### Verifiying proof
 
 The verifier then runs three basic check with the proof, the verification key of
 the trusted setup and the QAP, which are all explained in depth in
-`pinocchio.go:VerifyProof()`:
+`pinocchio.go:PHGR13Verify()`:
 * Division check: looks if the QAP equation resolves "in the exponent"
 * Correct polynomial check: We check that the prover correctly used the
   polynomials of the QAP, the ones that were blindly evaluated in CRS
@@ -142,9 +157,9 @@ r1cs := createR1CS()
 s := createWitness(r1cs)
 qap := ToQAP(r1cs)
 diff := qap.nbVars - qap.nbIO
-setup := NewTrustedSetup(qap)
-proof := GenProof(setup.EK, qap, s)
-fmt.Println(VerifyProof(setup.VK, qap, proof, s[:diff]))
+setup := NewPHGR13TrustedSetup(qap)
+proof := PHGR13Prove(setup.EK, qap, s)
+fmt.Println(PHGR13Verify(setup.VK, qap, proof, s[:diff]))
 ```
 
 Note the `diff` variable is just because in this test we have access to
@@ -152,6 +167,20 @@ everything. In reality, the verifier only needs the values of the input /
 outputs so we restrict the solution vector to these variable when giving it to
 the verifier.
 
+### Groth16
+
+Groth16 is an improvement to PHGR13 that brings smaller trusted setup, faster
+proving time and faster verification time as well as smaller proof. 
+API is drastically similar:
+```
+r1cs := createR1CS()
+s := createWitness(r1cs)
+qap := ToQAP(r1cs)
+diff := qap.nbVars - qap.nbIO
+setup := NewGroth16TrustedSetup(qap)
+proof := Groth16Prove(setup.EK, qap, s)
+fmt.Println(Groth16Verify(setup.VK, qap, proof, s[:diff]))
+```
 
 ## Resources
 

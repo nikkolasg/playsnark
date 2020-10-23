@@ -15,7 +15,7 @@ func TestPinocchioCombine(t *testing.T) {
 	var px = p.Eval(x)
 	var gpx = NewG1().Mul(px, nil)
 
-	var blindedPoints = generatePowersCommit(zeroG1, x, one, d)
+	var blindedPoints = GeneratePowersCommit(zeroG1, x, one, d)
 	var res = p.BlindEval(zeroG1, blindedPoints)
 	require.True(t, gpx.Equal(res))
 }
@@ -25,8 +25,8 @@ func TestPinocchioProofValidDivision(t *testing.T) {
 	s := createWitness(r1cs)
 	qap := ToQAP(r1cs)
 	diff := qap.nbVars - qap.nbIO
-	setup := NewTrustedSetup(qap)
-	proof := GenProof(setup.EK, qap, s)
+	setup := NewPHGR13TrustedSetup(qap)
+	proof := PHGR13Prove(setup.EK, qap, s)
 
 	// test GHS
 	// compute h(x) then evaluate it blindly at point s
@@ -192,7 +192,7 @@ func TestPinocchioProofValidDivision(t *testing.T) {
 	// v(s) * w(s) - y(s)      == p(s) == h(s) * t(s)
 	// which is the QAP equation
 	require.True(t, leftS.Equal(rightS))
-	require.True(t, VerifyProof(setup.VK, qap, proof, s[:diff]))
+	require.True(t, PHGR13Verify(setup.VK, qap, proof, s[:diff]))
 }
 
 func TestPinocchioInvalidProof(t *testing.T) {
@@ -200,8 +200,8 @@ func TestPinocchioInvalidProof(t *testing.T) {
 	s := createWitness(r1cs)
 	qap := ToQAP(r1cs)
 	diff := qap.nbVars - qap.nbIO
-	setup := NewTrustedSetup(qap)
-	proof := GenProof(setup.EK, qap, s)
+	setup := NewPHGR13TrustedSetup(qap)
+	proof := PHGR13Prove(setup.EK, qap, s)
 	fmt.Println(proof.String())
 
 	// left is e(g^(a_v*v(s) + a_w*w(s) + a_y *y(s)) * beta,g^gamma)
@@ -238,41 +238,41 @@ func TestPinocchioInvalidProof(t *testing.T) {
 	right := zeroGT.Clone().Add(t1, t2)
 	require.True(t, right.Equal(left))
 
-	require.True(t, VerifyProof(setup.VK, qap, proof, s[:diff]))
+	require.True(t, PHGR13Verify(setup.VK, qap, proof, s[:diff]))
 
 	p2 := proof
 	p2.yss = NewG1().Pick(random.New())
-	require.False(t, VerifyProof(setup.VK, qap, p2, s[:diff]))
+	require.False(t, PHGR13Verify(setup.VK, qap, p2, s[:diff]))
 
 	p2 = proof
 	p2.vss = NewG1().Pick(random.New())
-	require.False(t, VerifyProof(setup.VK, qap, p2, s[:diff]))
+	require.False(t, PHGR13Verify(setup.VK, qap, p2, s[:diff]))
 
 	p2 = proof
 	p2.wss = NewG2().Pick(random.New())
-	require.False(t, VerifyProof(setup.VK, qap, p2, s[:diff]))
+	require.False(t, PHGR13Verify(setup.VK, qap, p2, s[:diff]))
 
 	p2 = proof
 	p2.hs = NewG1().Pick(random.New())
-	require.False(t, VerifyProof(setup.VK, qap, p2, s[:diff]))
+	require.False(t, PHGR13Verify(setup.VK, qap, p2, s[:diff]))
 
 	p2 = proof
 	p2.gz = NewG1().Pick(random.New())
-	require.False(t, VerifyProof(setup.VK, qap, p2, s[:diff]))
+	require.False(t, PHGR13Verify(setup.VK, qap, p2, s[:diff]))
 
 	p2 = proof
 	vk2 := setup.VK
 	vk2.bgamma2 = NewG2().Pick(random.New())
-	require.False(t, VerifyProof(vk2, qap, p2, s[:diff]))
+	require.False(t, PHGR13Verify(vk2, qap, p2, s[:diff]))
 
 	p2 = proof
 	vk2 = setup.VK
 	vk2.av = NewG2().Pick(random.New())
-	require.False(t, VerifyProof(vk2, qap, p2, s[:diff]))
+	require.False(t, PHGR13Verify(vk2, qap, p2, s[:diff]))
 
 	p2 = proof
 	vk2 = setup.VK
 	vk2.ay = NewG2().Pick(random.New())
-	require.False(t, VerifyProof(vk2, qap, p2, s[:diff]))
+	require.False(t, PHGR13Verify(vk2, qap, p2, s[:diff]))
 
 }
