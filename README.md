@@ -171,15 +171,17 @@ the verifier.
 
 Groth16 is an improvement to PHGR13 that brings smaller trusted setup, faster
 proving time and faster verification time as well as smaller proof. 
-API is drastically similar:
-```
+API is drastically similar except I haven't separated the trusted setup part
+into two as with PHGR13. The implementation is the straightforward
+implementation from the paper:
+```go
 r1cs := createR1CS()
 s := createWitness(r1cs)
 qap := ToQAP(r1cs)
 diff := qap.nbVars - qap.nbIO
 setup := NewGroth16TrustedSetup(qap)
-proof := Groth16Prove(setup.EK, qap, s)
-fmt.Println(Groth16Verify(setup.VK, qap, proof, s[:diff]))
+proof := Groth16Prove(setup, qap, s)
+fmt.Println(Groth16Verify(setup, qap, proof, s[:diff]))
 ```
 
 ## Resources
