@@ -1,7 +1,11 @@
 [![Build Status](https://travis-ci.com/nikkolasg/playsnark.svg?branch=master)](https://travis-ci.com/nikkolasg/playsnark)
 [![codecov](https://codecov.io/gh/nikkolasg/playsnark/branch/master/graph/badge.svg?token=F29VQZ22KO)](undefined)
 
-**WARNING: This is a toy implementation with potentially many pitfalls and bugs, do ABSOLUTELY NOT use it in any production setting, you've been warned!**
+**WARNING: This is a toy implementation with many pitfalls and bugs and is NOT
+intented to be securely deployed, do ABSOLUTELY NOT use it in any production
+setting, you've been warned!** For example, this implementation keeps around 
+very sensitive information during trusted setup or proof generation. The goal is
+to learn how the different proofs system work.
 
 # Playsnark: a playground to learn proofs systems
 

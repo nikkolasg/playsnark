@@ -1,6 +1,7 @@
 package playsnark
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/drand/kyber"
@@ -222,6 +223,10 @@ func (p Poly) Normalize() Poly {
 	return p[:maxi]
 }
 
+func (p Poly) Degree() int {
+	return len(p) - 1
+}
+
 type pair struct {
 	I int
 	V Element
@@ -326,8 +331,9 @@ func lagrangeBasis(g kyber.Group, i int, xs map[int]Element) Poly {
 // degree it doesn't affect the result, but it must have at least the same
 // degree as p
 func (p Poly) BlindEval(zero Commit, blindedPoint []Commit) Commit {
-	if len(p) > len(blindedPoint) {
-		panic("mismatch of length between poly and blinded eval points")
+	// XXX change that to equality
+	if len(p) != len(blindedPoint) {
+		panic(fmt.Sprintf("mismatch of length between poly %d and blinded eval points %d", len(p), len(blindedPoint)))
 	}
 	var acc = zero.Clone()
 	var tmp = zero.Clone()
@@ -335,4 +341,13 @@ func (p Poly) BlindEval(zero Commit, blindedPoint []Commit) Commit {
 		acc = acc.Add(acc, tmp.Mul(p[i], blindedPoint[i]))
 	}
 	return acc
+}
+
+func (p Poly) Commit(base Commit) PolyCommit {
+	var pp = make([]Commit, 0, len(p))
+	for _, c := range p {
+		bb := base.Clone()
+		pp = append(pp, bb.Mul(c, bb))
+	}
+	return pp
 }

@@ -148,6 +148,19 @@ func (q *QAP) IsValid(sol Vector) bool {
 	return true
 }
 
+func (q QAP) Quotient(sol Vector) Poly {
+	// compute h(x) then evaluate it blindly at point s
+	left, right, out := q.computeAggregatePoly(sol)
+	// p(x) = t(x) * h(x)
+	px := left.Mul(right).Sub(out)
+	// h(x) = p(x) / t(x)
+	hx, rem := px.Div2(q.z)
+	if len(rem.Normalize()) > 0 {
+		panic("apocalypse")
+	}
+	return hx
+}
+
 func (q QAP) computeAggregatePoly(sol Vector) (left Poly, right Poly, out Poly) {
 	left = Poly([]Element{})
 	right = Poly([]Element{})

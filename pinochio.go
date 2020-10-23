@@ -374,14 +374,17 @@ func VerifyProof(vk VerificationKey, qap QAP, p Proof, io Vector) bool {
 	return true
 }
 
-// generatePowersCommit returns { shift * s^i} for i=0...power included
+// generatePowersCommit returns { g^shift * s^i} for i=0...power included
 func generatePowersCommit(base Commit, e Element, shift Element, power int) []Commit {
 	var gi = make([]Commit, 0, power+1)
-	gi = append(gi, base.Clone().Base())
-	var tmp = one.Clone()
+	gi = append(gi, base.Clone().Mul(shift, nil))
+	var si = one.Clone()
+	var tmp = NewElement()
 	for i := 0; i < power; i++ {
-		tmp = tmp.Mul(tmp, e)
-		tmp = tmp.Mul(tmp, shift)
+		// s * (tmp) = s * ( s * ( .. ) )
+		si = si.Mul(si, e)
+		// s^i * shift
+		tmp = tmp.Mul(si, shift)
 		gi = append(gi, base.Clone().Mul(tmp, nil))
 	}
 	return gi
