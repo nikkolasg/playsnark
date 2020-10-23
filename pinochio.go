@@ -98,7 +98,7 @@ func NewTrustedSetup(qap QAP) TrustedSetup {
 	// it, it only evaluates its polynomials blindly to this point
 	s := NewElement().Pick(random.New())
 	// gsi contains g^(s^i) from i=0 to g^(si^#of gates) included
-	ek.gsi = generatePowersCommit(zeroG1, s, one.Clone(), qap.nbGates)
+	ek.gsi = generatePowersCommit(zeroG1, s, one.Clone(), qap.z.Degree()-2)
 	// alpha for the left right and outputs are for generating the linear
 	// combination in the exponent
 	av := NewElement().Pick(random.New())
