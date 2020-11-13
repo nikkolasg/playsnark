@@ -1,7 +1,8 @@
 package bproof
 
 import (
-	"github.com/nikkolasg/playsnark"
+	"bytes"
+	"fmt"
 )
 
 // In Bulletproof style of proof, we need to represent the circuit as:
@@ -24,14 +25,14 @@ type LinearCombination interface {
 // term of a linear combination.
 type product struct {
 	Witness variable
-	Coeff   playsnark.Element
+	Coeff   Scalar
 }
 
 func newOneProduct(v variable) product {
-	return product{Witness: v, Coeff: playsnark.NewElement().One()}
+	return product{Witness: v, Coeff: NewScalar().One()}
 }
 func newMinusProduct(v variable) product {
-	a := playsnark.NewElement().One()
+	a := NewScalar().One()
 	return product{Witness: v, Coeff: a.Neg(a)}
 }
 
@@ -61,7 +62,7 @@ func (l *linearCombination) Products() []product {
 	return *l
 }
 
-type Constraint []playsnark.Element
+type Constraint []Scalar
 
 type Circuit struct {
 	nbVars      int
@@ -76,9 +77,9 @@ type Circuit struct {
 
 type ProverCircuit struct {
 	Circuit
-	a []playsnark.Element
-	b []playsnark.Element
-	c []playsnark.Element
+	a []Scalar
+	b []Scalar
+	c []Scalar
 }
 
 func NewCircuit() *Circuit {
@@ -141,23 +142,24 @@ func (c *Circuit) Constraint(lc LinearCombination) {
 // LC + (-1) * v = 0
 func (c *Circuit) wire(input LinearCombination, v variable) {
 	lc := linearCombination(append(input.Products(), newMinusProduct(v)))
+	fmt.Println("New Wire Added: ", lc)
 	c.Constraint(&lc)
 }
 
 // Allocate creates a left right and output variable where left is set to a,
 // right is set to b, and out is set to a * b.
 // At the beginnin of a circuit, one can create a "one" variable .
-func (c *ProverCircuit) Allocate(a, b Scalar) (av variable, bv variable, out variable) {
+func (c *ProverCircuit) Allocate(a, b Scalar) (left LinearCombination, right LinearCombination, out LinearCombination) {
 	o := NewScalar().Mul(a, b)
 	c.pushWitness(a, b, o)
-	left, right, out := c.newMultiplier()
-	return left, right, out
+	av, bv, outv := c.newMultiplier()
+	return &av, &bv, &outv
 }
 
 // Eval takes a linear combination and evaluates its value with the witness
 // vector. The result can then be used an input in sbusequent gates.
 func (c *ProverCircuit) eval(a LinearCombination) Scalar {
-	s := NewScalar()
+	s := zero()
 	for _, p := range a.Products() {
 		switch p.Witness.Kind {
 		case VLEFT:
@@ -167,7 +169,7 @@ func (c *ProverCircuit) eval(a LinearCombination) Scalar {
 		case VOUT:
 			s = s.Add(s, NewScalar().Mul(c.c[p.Witness.Index], p.Coeff))
 		case CST:
-			s = s.Add(s, NewScalar().Neg(p.Coeff))
+			s = s.Add(s, p.Coeff)
 		}
 	}
 	return s
@@ -177,8 +179,9 @@ func (c *ProverCircuit) Mul(a, b LinearCombination) (l variable, r variable, o v
 	va := c.eval(a)
 	vb := c.eval(b)
 	out := NewScalar().Mul(va, vb)
-	l, r, o = c.Circuit.Mul(a, b)
+	fmt.Println("Prover.Mul(): a", va, "  - b", vb, " --> ", out)
 	c.pushWitness(va, vb, out)
+	l, r, o = c.Circuit.Mul(a, b)
 	return
 }
 func (c *ProverCircuit) pushWitness(a, b, out Scalar) {
@@ -192,6 +195,8 @@ func (c *ProverCircuit) pushWitness(a, b, out Scalar) {
 // of variable and Q is the number of linear constraints.
 // for constraint K
 // SUM a_i * w_l_K_i + SUM b_i * w_r_i + SUM c_i * w_o_i = w_k
+// Note that this implementation is not optimized at all: it generates full
+// length vector while they are supposedly very sparse.
 func (c *Circuit) Flatten() {
 	n := c.nbVars
 	q := len(c.constraints)
@@ -221,7 +226,10 @@ func (c *Circuit) Flatten() {
 			case VOUT:
 				wo[i][v.Index] = product.Coeff
 			case CST:
-				wk[i] = product.Coeff
+				// wl + wr + wo = wk
+				// When this circuit adds constant it just adds them to wk, so
+				// to satisfy the constraint we negate wk
+				wk[i] = NewScalar().Neg(product.Coeff)
 			}
 		}
 	}
@@ -229,4 +237,25 @@ func (c *Circuit) Flatten() {
 	c.wr = wr
 	c.wo = wo
 	c.wk = wk
+}
+
+func (c *Circuit) String() string {
+	var b bytes.Buffer
+	for k := 0; k < len(c.wl); k++ {
+		b.WriteString(fmt.Sprintf("Constraint %d: \n", k))
+		b.WriteString(fmt.Sprintf("\t- w_l: %v\n", c.wl[k]))
+		b.WriteString(fmt.Sprintf("\t- w_r: %v\n", c.wr[k]))
+		b.WriteString(fmt.Sprintf("\t- w_o: %v\n", c.wo[k]))
+		b.WriteString(fmt.Sprintf("\t- w_k: %v\n", c.wk[k]))
+	}
+	return b.String()
+}
+
+func (c *ProverCircuit) String() string {
+	var b bytes.Buffer
+	b.WriteString(c.Circuit.String())
+	b.WriteString(fmt.Sprintf("Witness A: %v\n", c.a))
+	b.WriteString(fmt.Sprintf("Witness B: %v\n", c.b))
+	b.WriteString(fmt.Sprintf("Witness C: %v\n", c.c))
+	return b.String()
 }

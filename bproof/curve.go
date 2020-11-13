@@ -16,3 +16,7 @@ func NewScalar() Scalar {
 func zero() Scalar {
 	return NewScalar().Zero()
 }
+
+func one() Scalar {
+	return NewScalar().One()
+}
