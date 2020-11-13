@@ -8,6 +8,7 @@ github.com/drand/kyber v1.0.2 h1:dHjtWJZJdn3zBBZ9pqLsLfcR9ScvDvSqzS1sWA8seao=
 github.com/drand/kyber v1.0.2/go.mod h1:x6KOpK7avKj0GJ4emhXFP5n7M7W7ChAPmnQh/OL6vRw=
 github.com/drand/kyber v1.1.3 h1:WrOOim4p2kap8tY4yJGO1S4lfk7shVPOkQkNZASVFnE=
 github.com/drand/kyber v1.1.3/go.mod h1:9+IgTq7kadePhZg7eRwSD7+bA+bmvqRK+8DtmoV5a3U=
+github.com/drand/kyber v1.1.5 h1:0jYPXR/NN76WcWWBICnIkHATqLcA0oigG2uv7jijVHU=
 github.com/drand/kyber-bls12381 v0.2.0 h1:3GJfiHaMggQS2l2n7yrfX0PjY9BYikLM2f0zKP1eZTs=
 github.com/drand/kyber-bls12381 v0.2.0/go.mod h1:zQip/bHdeEB6HFZSU3v+d3cQE0GaBVQw9aR2E7AdoeI=
 github.com/drand/kyber-bls12381 v0.2.1-0.20200920171356-02a6d1c7cc77 h1:imrDAsUj7tyTTht3pMX67Akc6CYy3vGiS10PIC6nh6g=
@@ -27,6 +28,7 @@ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.4.0 h1:2E4SXV/wtOkTonXsotYi4li6zVWxYlZuYNCXe9XRJyk=
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
+go.dedis.ch/fixbuf v1.0.3 h1:hGcV9Cd/znUxlusJ64eAlExS+5cJDIyTyEG+otu5wQs=
 go.dedis.ch/fixbuf v1.0.3/go.mod h1:yzJMt34Wa5xD37V5RTdmp38cz3QhMagdGoem9anUalw=
 go.dedis.ch/kyber/v3 v3.0.4/go.mod h1:OzvaEnPvKlyrWyp3kGXlFdp7ap1VC6RkZDTaPikqhsQ=
 go.dedis.ch/kyber/v3 v3.0.9 h1:i0ZbOQocHUjfFasBiUql5zVeC7u/vahFd96DFA8UOWk=

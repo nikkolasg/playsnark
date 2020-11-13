@@ -1,6 +1,7 @@
 package playsnark
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 
@@ -15,6 +16,20 @@ type Matrix []Vector
 
 func NewMatrix(rows []Vector) Matrix {
 	return Matrix(rows)
+}
+
+func (m Matrix) String() string {
+	var b bytes.Buffer
+	b.WriteString("[\n")
+	for _, row := range m {
+		b.WriteString("  [")
+		for _, v := range row {
+			b.WriteString(fmt.Sprintf("%3v", v))
+		}
+		b.WriteString(" ]\n")
+	}
+	b.WriteString("]\n")
+	return b.String()
 }
 
 func (m Matrix) Column(i int) Vector {

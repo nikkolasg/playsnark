@@ -75,6 +75,20 @@ func createWitness(r R1CS) Vector {
 	return solution
 }
 
+// x^3 + x + 5 = 35
+// a = ( x, x^2 )
+// b = ( x, x )
+// c = ( x^2, x^3 )
+//
+// linear combinations:
+// same inputs for first gate: a1 == b1
+// u1 = (1,0) v1 = (-1,0) w1=(0,0) k1 = 0
+// * output of first gate in left input of second gate
+// * right input of second gate is input of first gate
+// u2 = (1,1) v2 = (0,-1) w2=(-1,0) k2 = 0
+// output of second gate with additions
+// u3 = (1,0) v3 = (0,0)  w3=(0,1) k3 = 35-5 // x^3 + x = 35-5
+
 // R1CS describe the circuit: it contains the 3 matrixes left right and output
 // such that when given a valid vector of solution "s", the equation
 // <left,s> * <right,s> - <out,s> = 0 is satisfied.
