@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/drand/kyber/util/random"
+	poly "github.com/nikkolasg/playsnark/polynomial"
 )
 
 // This file implements the logic of the Pinocchio PHGR13 proof system mostly as
@@ -211,7 +212,7 @@ func PHGR13Prove(ek PHGR13EvalKey, qap QAP, solution Vector) PHGR13Proof {
 	px := left.Mul(right).Sub(out)
 	// h(x) = p(x) / t(x)
 	hx, rem := px.Div2(qap.z)
-	if len(rem.Normalize()) > 0 {
+	if len(rem.Normalize().Coeffs()) > 0 {
 		panic("apocalypse")
 	}
 	// g^h(s) = SUM(s_i * G)
@@ -378,7 +379,7 @@ func PHGR13Verify(vk PHGR13VerifKey, qap QAP, p PHGR13Proof, io Vector) bool {
 // commitments using the base and shifted by "shift". Note by giving shift as
 // one, nothing happens !
 // { g^(shift * p_i(x)) } for all p_i given
-func generateEvalCommit(base Commit, polys []Poly, x, shift Element) []Commit {
+func generateEvalCommit(base Commit, polys []poly.Poly, x, shift Element) []Commit {
 	var ret = make([]Commit, 0, len(polys))
 	for i := range polys {
 		tmp := polys[i].Normalize().Eval(x)

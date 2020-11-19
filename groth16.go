@@ -2,6 +2,7 @@ package playsnark
 
 import (
 	"github.com/drand/kyber/util/random"
+	poly "github.com/nikkolasg/playsnark/polynomial"
 )
 
 // Implements Groth16 paper https://eprint.iacr.org/2016/260.pdf
@@ -131,7 +132,7 @@ func Groth16Prove(tr Groth16Setup, q QAP, sol Vector) Groth16Proof {
 	// g^u_i(x) = SUM_j( g^(x^i)^coeff(u_i,j)) = g^(u0 *x^0 + u1*x^1 + ...)
 	// We then multiply by the solution vector to have g^(s_i * u_i(x))
 	// and iteratively sum the results for all variables
-	sumBlind := func(basis Commit, polys []Poly, xi []Commit) Commit {
+	sumBlind := func(basis Commit, polys []poly.Poly, xi []Commit) Commit {
 		var sum = basis.Clone().Null()
 		for i := 0; i < q.nbVars; i++ {
 			uix := polys[i].BlindEval(basis.Clone().Null(), xi)

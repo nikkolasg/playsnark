@@ -1,4 +1,4 @@
-package pedersen
+package commit
 
 import (
 	"testing"

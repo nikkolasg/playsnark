@@ -2,6 +2,7 @@ package playsnark
 
 import (
 	"github.com/drand/kyber/share"
+	poly "github.com/nikkolasg/playsnark/polynomial"
 )
 
 // QAP is the polynomial version of a R1CS circuit. It contains the left right
@@ -19,11 +20,11 @@ type QAP struct {
 	// nbGates is the variable "d" in the pinochio paper
 	nbGates int
 	// left right and out
-	left  []Poly
-	right []Poly
-	out   []Poly
+	left  []poly.Poly
+	right []poly.Poly
+	out   []poly.Poly
 	// z is the minimal polynomial (x-1)(x-2)(x-3)...
-	z Poly
+	z poly.Poly
 }
 
 // ToQAP takes a R1CS circuit description and turns it into its polynomial QAP
@@ -38,17 +39,19 @@ func ToQAP(circuit R1CS) QAP {
 	out := qapInterpolate(circuit.out)
 	nbVar := len(circuit.vars)
 	nbGates := len(circuit.left)
-	var z Poly
+	var z poly.Poly
+	var setZ bool
 	for i := 1; i <= nbGates; i++ {
 		// you multiply by (x - i) with i being as high as the number of gates,
 		// because the polynomials left,right and out vanishes on these inputs
 		// -i + x
-		xi := Poly([]Element{
+		xi := poly.NewPolyFrom(Group, []Element{
 			NewElement().Neg(Value(i).ToFieldElement()),
 			one.Clone(),
 		})
-		if z == nil {
+		if !setZ {
 			z = xi
+			setZ = true
 		} else {
 			z = z.Mul(xi)
 		}
@@ -64,7 +67,7 @@ func ToQAP(circuit R1CS) QAP {
 	}
 }
 
-func qapInterpolate(m Matrix) []Poly {
+func qapInterpolate(m Matrix) []poly.Poly {
 	// once transposed, a row of this matrix represents all the usage of this
 	// variable at each step of the circuit
 	// so for example, all the assignements on the lefts inputs look like this
@@ -80,21 +83,21 @@ func qapInterpolate(m Matrix) []Poly {
 	// p(1) = 1, p(2) = 0, p(3) = 1 and p(4) = 0
 	// We return one polynomial for each variable
 	t := m.Transpose()
-	out := make([]Poly, 0, len(t))
+	out := make([]poly.Poly, 0, len(t))
 	for _, variable := range t {
 		var ys = make([]Element, 0, len(t))
 		for _, v := range variable {
 			ys = append(ys, v.ToFieldElement())
 		}
-		poly := Interpolate(ys)
+		poly := poly.Interpolate(Group, ys)
 		out = append(out, poly)
 	}
 	return out
 }
 
-func toPoly(s *share.PriPoly) Poly {
+func toPoly(s *share.PriPoly) poly.Poly {
 	pp := s.Coefficients()
-	return Poly(pp)
+	return poly.NewPolyFrom(Group, pp)
 }
 
 // Verify takes the vector of solution and makes the dot product with it such
@@ -142,31 +145,31 @@ func (q *QAP) IsValid(sol Vector) bool {
 	// now we try to verify if the equation is really satisfied by dividing eq /
 	// z(x) : we should find no remainder
 	_, rem := t.Div2(q.z)
-	if len(rem.Normalize()) > 0 {
+	if len(rem.Normalize().Coeffs()) > 0 {
 		return false
 	}
 	return true
 }
 
-func (q QAP) Quotient(sol Vector) Poly {
+func (q QAP) Quotient(sol Vector) poly.Poly {
 	// compute h(x) then evaluate it blindly at point s
 	left, right, out := q.computeAggregatePoly(sol)
 	// p(x) = t(x) * h(x)
 	px := left.Mul(right).Sub(out)
 	// h(x) = p(x) / t(x)
 	hx, rem := px.Div2(q.z)
-	if len(rem.Normalize()) > 0 {
+	if len(rem.Normalize().Coeffs()) > 0 {
 		panic("apocalypse")
 	}
 	return hx
 }
 
-func (q QAP) computeAggregatePoly(sol Vector) (left Poly, right Poly, out Poly) {
-	left = Poly([]Element{})
-	right = Poly([]Element{})
-	out = Poly([]Element{})
+func (q QAP) computeAggregatePoly(sol Vector) (left poly.Poly, right poly.Poly, out poly.Poly) {
+	left = poly.NewZeroPoly(Group)
+	right = poly.NewZeroPoly(Group)
+	out = poly.NewZeroPoly(Group)
 	for varIndex, val := range sol {
-		polyVal := Poly([]Element{val.ToFieldElement()})
+		polyVal := poly.NewPolyFrom(Group, []Element{val.ToFieldElement()})
 		left = left.Add(q.left[varIndex].Mul(polyVal))
 		right = right.Add(q.right[varIndex].Mul(polyVal))
 		out = out.Add(q.out[varIndex].Mul(polyVal))

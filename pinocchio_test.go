@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	"github.com/drand/kyber/util/random"
+	poly "github.com/nikkolasg/playsnark/polynomial"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPinocchioCombine(t *testing.T) {
 	var d = 4
-	var p = randomPoly(4)
+	var p = poly.RandomPoly(Group, 4)
 	var x = NewElement().Pick(random.New())
 	var px = p.Eval(x)
 	var gpx = NewG1().Mul(px, nil)
@@ -35,7 +36,7 @@ func TestPinocchioProofValidDivision(t *testing.T) {
 	px := left.Mul(right).Sub(out)
 	// h(x) = p(x) / t(x)
 	hx, rem := px.Div2(qap.z)
-	if len(rem.Normalize()) > 0 {
+	if len(rem.Normalize().Coeffs()) > 0 {
 		panic("apocalypse")
 	}
 	hs := hx.Eval(setup.t.s)
