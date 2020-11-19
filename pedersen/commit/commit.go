@@ -21,9 +21,9 @@ type Point = kyber.Point
 
 // Setup contains the setup information for pedersen commitments
 type Setup struct {
-	gs []Point
-	s  Point
-	g  Group
+	Gs []Point
+	S  Point
+	G  Group
 }
 
 // NewSetup returns the setup necessary to compute a commitment
@@ -34,9 +34,9 @@ func NewSetup(g Group, l int) Setup {
 	}
 	s := g.Point().Pick(oracle(g, l, l+1))
 	return Setup{
-		gs: gs,
-		s:  s,
-		g:  g,
+		Gs: gs,
+		S:  s,
+		G:  g,
 	}
 }
 
@@ -55,9 +55,9 @@ func oracle(g Group, l, pos int) cipher.Stream {
 // Commit compute the commitment of the points given the setup and the
 // randomness to use.
 func Commit(s Setup, msgs []Scalar, r Scalar) Point {
-	var acc = s.g.Point().Mul(r, s.s)
+	var acc = s.G.Point().Mul(r, s.S)
 	for i, m := range msgs {
-		gxi := s.g.Point().Mul(m, s.gs[i])
+		gxi := s.G.Point().Mul(m, s.Gs[i])
 		acc.Add(acc, gxi)
 	}
 	return acc

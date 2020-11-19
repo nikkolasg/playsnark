@@ -40,6 +40,10 @@ func NewPolyFrom(g Group, coeffs []Scalar) Poly {
 	return Poly{c: coeffs, g: g}
 }
 
+func (p Poly) Set(pos int, coeff Scalar) {
+	p.c[pos] = coeff
+}
+
 func (p Poly) Mul(p2 Poly) Poly {
 	l := len(p.c) + len(p2.c) - 1
 	output := make([]Scalar, l)
@@ -53,6 +57,12 @@ func (p Poly) Mul(p2 Poly) Poly {
 		}
 	}
 	return Poly{c: output, g: p.g}
+}
+
+func (p Poly) Scale(a Scalar) {
+	for i := range p.c {
+		p.c[i] = p.c[i].Mul(p.c[i], a)
+	}
 }
 
 func (p Poly) Eval(i Scalar) Scalar {
