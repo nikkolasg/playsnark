@@ -1,13 +1,13 @@
 package commit
 
 import (
-	"bytes"
 	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/binary"
 
 	"github.com/drand/kyber"
 	"github.com/drand/kyber/util/random"
+	"golang.org/x/crypto/blake2s"
 )
 
 // Group has points on it and can create scalar from the scalar fields
@@ -45,16 +45,22 @@ func oracle(g Group, l, pos int) cipher.Stream {
 	var h = sha256.New()
 	h.Write([]byte("pedersen-commit"))
 	h.Write([]byte(g.String()))
-	binary.Write(h, binary.LittleEndian, l)
-	binary.Write(h, binary.LittleEndian, pos)
-	var b bytes.Buffer
-	b.Write(h.Sum(nil))
-	return random.New(&b)
+	binary.Write(h, binary.LittleEndian, int32(l))
+	binary.Write(h, binary.LittleEndian, int32(pos))
+	xof, err := blake2s.NewXOF(0, h.Sum(nil))
+	if err != nil {
+		panic(err)
+	}
+	return random.New(xof)
 }
 
 // Commit compute the commitment of the points given the setup and the
-// randomness to use.
+// randomness to use. If r == nil, then r is set 0, so the commitment is not
+// hiding anymore.
 func Commit(s Setup, msgs []Scalar, r Scalar) Point {
+	if r == nil {
+		r = s.G.Scalar().Zero()
+	}
 	var acc = s.G.Point().Mul(r, s.S)
 	for i, m := range msgs {
 		gxi := s.G.Point().Mul(m, s.Gs[i])

@@ -32,7 +32,10 @@ func emptyPoly(g Group, d int) Poly {
 	return Poly{c: o, g: g}
 }
 
-func NewZeroPoly(g Group) Poly {
+func NewZeroPoly(g Group, degree ...int) Poly {
+	if len(degree) > 0 {
+		return emptyPoly(g, degree[0])
+	}
 	return Poly{c: []Scalar{}, g: g}
 }
 

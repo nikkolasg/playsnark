@@ -8,8 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var g = edwards25519.NewBlakeSHA256Ed25519()
+
 func TestCommit(t *testing.T) {
-	var g = edwards25519.NewBlakeSHA256Ed25519()
 	var l = 10
 	setup := NewSetup(g, l)
 	msgs := make([]Scalar, l-1)
